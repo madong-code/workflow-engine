@@ -1,0 +1,22 @@
+{
+    "name": "fork_join_test",
+    "display_name": "分支合并测试",
+    "nodes": [
+        {"id": "start", "type": "ingenious:start", "x": 100, "y": 200},
+        {"id": "fork", "type": "ingenious:fork", "x": 250, "y": 200},
+        {"id": "task_a", "type": "ingenious:task", "x": 400, "y": 100, "text": {"value": "任务A"},
+         "properties": {"assignee": "user_a", "perform_type": "0"}},
+        {"id": "task_b", "type": "ingenious:task", "x": 400, "y": 300, "text": {"value": "任务B"},
+         "properties": {"assignee": "user_b", "perform_type": "0"}},
+        {"id": "join", "type": "ingenious:join", "x": 550, "y": 200},
+        {"id": "end", "type": "ingenious:end", "x": 700, "y": 200}
+    ],
+    "edges": [
+        {"id": "e1", "sourceNodeId": "start", "targetNodeId": "fork"},
+        {"id": "e2", "sourceNodeId": "fork", "targetNodeId": "task_a"},
+        {"id": "e3", "sourceNodeId": "fork", "targetNodeId": "task_b"},
+        {"id": "e4", "sourceNodeId": "task_a", "targetNodeId": "join"},
+        {"id": "e5", "sourceNodeId": "task_b", "targetNodeId": "join"},
+        {"id": "e6", "sourceNodeId": "join", "targetNodeId": "end"}
+    ]
+}

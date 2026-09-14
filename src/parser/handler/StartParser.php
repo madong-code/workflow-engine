@@ -1,32 +1,20 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\parser\handler;
+namespace madong\workflow\parser\handler;
 
-use madong\ingenious\model\logicflow\LfNode;
-use madong\ingenious\model\NodeModel;
-use madong\ingenious\model\StartModel;
-use madong\ingenious\parser\AbstractINodeParser;
+use madong\workflow\parser\AbstractNodeParser;
+use madong\workflow\parser\lf\LfNode;
+use madong\workflow\model\nodes\StartNode;
 
-class StartParser extends AbstractINodeParser
+class StartParser extends AbstractNodeParser
 {
-    public function parseNode(LfNode $lfNode): void
+    protected function parseNode(LfNode $lfNode): void
     {
-
+        // 开始节点无额外属性
     }
 
-    public function newModel():NodeModel
+    public function build(): StartNode
     {
-        return new StartModel();
+        return $this->builder->buildStartNode();
     }
 }

@@ -1,72 +1,43 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
-namespace madong\ingenious\interface\services;
 
+namespace madong\workflow\interface\services;
 
-use madong\interface\IDict;
-use madong\ingenious\interface\IExecution;
-use madong\ingenious\interface\model\IProcessTask;
-use madong\ingenious\interface\model\IProcessTaskActor;
-use madong\ingenious\model\CustomModel;
-use madong\ingenious\model\ProcessModel;
-use madong\ingenious\model\TaskModel;
+use madong\workflow\interface\model\IProcessTask;
+use madong\workflow\model\nodes\TaskNode;
+use madong\workflow\context\ExecutionContext;
 
 interface IProcessTaskService
 {
-    public function created(object $param): ?IProcessTask;
+    /** 任务无协办组关联（走旧版同节点 sibling 兜底判断） */
+    public const COSIGN_NONE = 0;
+    /** 协办组未办结：当前任务等待，不流转 */
+    public const COSIGN_WAIT = 1;
+    /** 协办组办结且为前加签/会签模式：锚点任务待恢复终审，禁止流转（服务层负责恢复） */
+    public const COSIGN_RESUME = 2;
+    /** 协办组办结且为后加签模式（或锚点终审）：允许流转 */
+    public const COSIGN_FLOW = 3;
 
-    public function updated(object $param): bool;
+    public function createTask(TaskNode $taskNode, ExecutionContext $ctx): array;
+    public function createCountersignTask(TaskNode $taskNode, ExecutionContext $ctx): array;
+    public function getById(string $id): ?IProcessTask;
+    public function finishProcessTask(string $id, string $operator, object $args): void;
+    public function withdrawTask(string $id, string $operator): void;
+    public function isAllowed(IProcessTask $task, string $operator): bool;
+    public function getDoingTaskList(string $instanceId, string $taskNames): array;
+    public function getTaskListByOperator(string $operator, array $filters = []): array;
+    public function cancelDoingTasksByNode(string $instanceId, string $taskName, string $excludeTaskId, string $operator): int;
 
-    public function list(object $param): array;
+    /**
+     * 流程结束兜底：取消实例内全部 DOING/SUSPENDED 残留任务
+     * （并行分支/多出边场景下，实例走到结束节点时可能还有未办任务，需同步取消避免幽灵待办）
+     */
+    public function cancelAllDoingTasks(string $instanceId, string $operator): int;
 
-    public function findById(string|int $id): ?IProcessTask;
-
-    public function saveProcessTask(IProcessTask $processTask): void;
-
-    public function updateProcessTask(IProcessTask $processTask): void;
-
-    public function getDoingTaskList(string|int $processInstanceId, string|int|array $taskNames): ?array;
-
-    public function finishProcessTask(string|int $processTaskId, string|int $operator, IDict $args): void;
-
-    public function abandonProcessTask(string $processTaskId, string $operator, IDict $args): void;
-
-    public function createTask(TaskModel $taskModel, IExecution $execution): ?array;
-
-    public function getById(string|int $id): ?IProcessTask;
-
-    public function addTaskActor(string|int $processTaskId, array|string|int $actors): void;
-
-    public function transfer(object $param): ?IProcessTaskActor;
-
-    public function addCandidateActor(string|int $processTaskId, array|string $actors): void;
-
-    public function removeTaskActor(string|int $processTaskId, array|string $actors): void;
-
-    public function isAllowed(IProcessTask $task, string|int $operator): bool;
-
-    public function getTaskActor($processTaskId): array;
-
-    public function getTaskActors(TaskModel $model, IExecution $execution): array;
-
-    public function rejectTask(ProcessModel $model, IProcessTask $currentTask): ?IProcessTask;
-
-    public function jumpAbleTaskNameList(string|int $processInstanceId): array;
-
-    public function candidatePage(IDict $query): object|array;
-
-    public function createCountersignTask(TaskModel $taskModel, IExecution $execution): IProcessTask|array|null;
-
-    public function history(IExecution $execution, CustomModel $model): ?IProcessTask;
+    /**
+     * 判断任务所处的协办组（加签/运行时会签）状态，驱动引擎是否流转。
+     *
+     * @param IProcessTask $task 当前正在办结/执行的任务
+     * @return int COSIGN_NONE / COSIGN_WAIT / COSIGN_RESUME / COSIGN_FLOW
+     */
+    public function getCosignGroupState(IProcessTask $task): int;
 }
-

@@ -1,43 +1,39 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\parser\handler;
+namespace madong\workflow\parser\handler;
 
-use madong\ingenious\model\CustomModel;
-use madong\ingenious\model\logicflow\LfNode;
-use madong\ingenious\model\NodeModel;
-use madong\ingenious\parser\AbstractINodeParser;
-use madong\ingenious\parser\INodeParser;
-use madong\ingenious\enums\ProcessConstEnum;
+use madong\workflow\parser\AbstractNodeParser;
+use madong\workflow\parser\lf\LfNode;
+use madong\workflow\model\nodes\CustomNode;
 
-class CustomParser extends AbstractINodeParser
+class CustomParser extends AbstractNodeParser
 {
-
-    public function parseNode(LfNode $lfNode): void
+    protected function parseNode(LfNode $lfNode): void
     {
-        $model      = $this->nodeModel; // 假设 nodeModel 是类的一个属性
-        $properties = $lfNode->getProperties(); // 假设 getProperties 是 LfNode 类的一个方法
-        //自定义方法如果有参数进行设置
-        $model->setClazz($properties->get(INodeParser::CLASS_KEY)); // 假设 getStr 是 Properties 类的一个方法
-        $model->setMethodName($properties->get(INodeParser::METHOD_NAME_KEY));
-        $model->setArgs($properties->get(INodeParser::ARGS_KEY));
-        $model->setVar($properties->get(INodeParser::RETURN_VAL_KEY, ProcessConstEnum::CUSTOM_RETURN_VAL->value));
-
+        $props = $lfNode->getProperties();
+        if ($props !== null) {
+            $this->builder
+                ->clazz($this->getProp($props, 'clazz'))
+                ->methodName($this->getProp($props, 'method_name'))
+                ->args($this->getProp($props, 'args'))
+                ->var($this->getProp($props, 'var'));
+        }
     }
 
-    public function newModel(): NodeModel
+    private function getProp(mixed $props, string $key): ?string
     {
-        return new CustomModel();
+        if ($props === null) return null;
+        // 统一 snake_case 键读取
+        if (is_array($props) || $props instanceof \ArrayAccess) {
+            if (isset($props[$key])) return (string) $props[$key];
+        } elseif (is_object($props) && property_exists($props, $key)) {
+            return (string) $props->$key;
+        }
+        return null;
+    }
 
+    public function build(): CustomNode
+    {
+        return $this->builder->buildCustomNode();
     }
 }

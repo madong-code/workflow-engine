@@ -1,27 +1,14 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
-namespace madong\ingenious\interface\services;
 
+namespace madong\workflow\interface\services;
 
-use madong\ingenious\interface\model\IProcessTaskHistory;
+use madong\workflow\interface\model\IProcessTask;
+use madong\workflow\interface\model\IProcessTaskHistory;
 
 interface IProcessTaskHistoryService
 {
-    public function created(object $param): ?IProcessTaskHistory;
-
-    public function updated(object $param): bool;
-
-    public function findById(string|int $id): ?IProcessTaskHistory;
-
-    public function list(object $param): array;
+    public function createHistoryProcessTask(IProcessTask $task): IProcessTaskHistory;
+    public function getById(string $id): ?IProcessTaskHistory;
+    public function getByProcessTaskId(string $taskId): ?IProcessTaskHistory;
+    public function getByProcessInstanceId(string $instanceId): array;
 }

@@ -1,37 +1,31 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\parser\handler;
+namespace madong\workflow\parser\handler;
 
-use madong\ingenious\model\DecisionModel;
-use madong\ingenious\model\logicflow\LfNode;
-use madong\ingenious\model\NodeModel;
-use madong\ingenious\parser\AbstractINodeParser;
-use madong\ingenious\parser\INodeParser;
+use madong\workflow\parser\AbstractNodeParser;
+use madong\workflow\parser\lf\LfNode;
+use madong\workflow\model\nodes\DecisionNode;
+use madong\workflow\model\builder\DecisionNodeBuilder;
 
-class DecisionParser extends AbstractINodeParser
+class DecisionParser extends AbstractNodeParser
 {
-    public function parseNode(LfNode $lfNode): void
+    protected function parseNode(LfNode $lfNode): void
     {
-        $model      = $this->nodeModel; // 假设 nodeModel 是类的一个属性
-        $properties = $lfNode->getProperties(); // 假设 getProperties 是 LfNode 类的一个方法
-        $model->setExpr($properties->get(INodeParser::EXPR_KEY));
-        $model->setHandleClass($properties->get(INodeParser::HANDLE_CLASS_KEY));
+        $decisionBuilder = new DecisionNodeBuilder();
+        $decisionBuilder->copyFrom($this->builder);
+
+        $decisionBuilder
+            ->expr($this->getStringProperty($lfNode, 'expr'))
+            ->handleClass($this->getStringProperty($lfNode, 'handle_class'));
+
+        $this->builder = $decisionBuilder;
     }
 
-    public function newModel(): NodeModel
+    public function build(): DecisionNode
     {
-        return new DecisionModel();
+        if ($this->builder instanceof DecisionNodeBuilder) {
+            return $this->builder->build();
+        }
+        throw new \LogicException('DecisionParser builder 未正确初始化');
     }
-
 }

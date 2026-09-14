@@ -1,18 +1,13 @@
 <?php
-/**
- *+------------------
- * madong
- *+------------------
- * Copyright (c) https://gitee.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Official Website: http://www.madong.tech
- */
 
-namespace madong\ingenious\interface\model;
+namespace madong\workflow\interface\model;
 
 interface IProcessSurrogate
 {
+    public function getId(): string;
+    public function getSurrogate(): string;
+    public function getOperator(): string;
+    public function getProcessName(): string;
 
+    public function getData(string $key, mixed $default = null): mixed;
 }

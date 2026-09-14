@@ -1,0 +1,20 @@
+{
+    "name": "decision_test",
+    "display_name": "决策分支测试",
+    "nodes": [
+        {"id": "start", "type": "ingenious:start", "x": 100, "y": 200},
+        {"id": "check", "type": "ingenious:decision", "x": 250, "y": 200},
+        {"id": "task_a", "type": "ingenious:task", "x": 400, "y": 100, "text": {"value": "审批A"},
+         "properties": {"assignee": "user_a", "perform_type": "0"}},
+        {"id": "task_b", "type": "ingenious:task", "x": 400, "y": 300, "text": {"value": "审批B"},
+         "properties": {"assignee": "user_b", "perform_type": "0"}},
+        {"id": "end", "type": "ingenious:end", "x": 600, "y": 200}
+    ],
+    "edges": [
+        {"id": "e1", "sourceNodeId": "start", "targetNodeId": "check"},
+        {"id": "e2", "sourceNodeId": "check", "targetNodeId": "task_a", "properties": {"expr": "${amount} > 1000"}},
+        {"id": "e3", "sourceNodeId": "check", "targetNodeId": "task_b"},
+        {"id": "e4", "sourceNodeId": "task_a", "targetNodeId": "end"},
+        {"id": "e5", "sourceNodeId": "task_b", "targetNodeId": "end"}
+    ]
+}

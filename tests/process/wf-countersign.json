@@ -1,0 +1,69 @@
+{
+  "name": "wf-countersign",
+  "display_name": "会签任务流程",
+  "instance_url": "countersignForm",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "ingenious:start",
+      "x": 280,
+      "y": 280,
+      "properties": { "width": 120, "height": 40 },
+      "text": { "x": 280, "y": 320, "value": "开始" }
+    },
+    {
+      "id": "apply",
+      "type": "ingenious:task",
+      "x": 480,
+      "y": 280,
+      "properties": {
+        "width": 120, "height": 40,
+        "assignee": "apply.operator",
+        "task_type": "Major",
+        "perform_type": "ANY",
+        "auto_execute": "N"
+      },
+      "text": { "x": 480, "y": 280, "value": "会签申请" }
+    },
+    {
+      "id": "countersign",
+      "type": "ingenious:task",
+      "x": 680,
+      "y": 280,
+      "properties": {
+        "width": 120, "height": 40,
+        "assignee": "countersign.operatorList",
+        "task_type": "Major",
+        "perform_type": "ALL",
+        "auto_execute": "N",
+        "field": {
+          "countersign_type": "PARALLEL",
+          "countersign_completion_condition": "#nrOfCompletedInstances==3"
+        }
+      },
+      "text": { "x": 680, "y": 280, "value": "三人并行会签" }
+    },
+    {
+      "id": "merge",
+      "type": "ingenious:join",
+      "x": 880,
+      "y": 280,
+      "properties": { "width": 120, "height": 40 },
+      "text": { "x": 880, "y": 280, "value": "会签合并" }
+    },
+    {
+      "id": "end",
+      "type": "ingenious:end",
+      "x": 1080,
+      "y": 280,
+      "properties": { "width": 120, "height": 40 },
+      "text": { "x": 1080, "y": 320, "value": "结束" }
+    }
+  ],
+  "edges": [
+    { "id": "t1", "type": "ingenious:transition", "sourceNodeId": "start", "targetNodeId": "apply", "properties": {} },
+    { "id": "t2", "type": "ingenious:transition", "sourceNodeId": "apply", "targetNodeId": "countersign", "properties": {} },
+    { "id": "t3", "type": "ingenious:transition", "sourceNodeId": "countersign", "targetNodeId": "merge", "properties": {} },
+    { "id": "t4", "type": "ingenious:transition", "sourceNodeId": "merge", "targetNodeId": "end", "properties": {} }
+  ]
+}

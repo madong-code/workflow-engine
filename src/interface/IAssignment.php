@@ -1,21 +1,10 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\interface;
+namespace madong\workflow\interface;
 
-use madong\ingenious\model\TaskModel;
+use madong\workflow\context\ExecutionContext;
 
 interface IAssignment
 {
-    public function assign(TaskModel $model, IExecution $execution);
+    public function assign(ExecutionContext $ctx): ?string;
 }

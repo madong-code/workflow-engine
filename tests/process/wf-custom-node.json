@@ -1,0 +1,56 @@
+{
+  "name": "wf-custom-node",
+  "display_name": "自定义节点流程",
+  "instance_url": "customNodeForm",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "ingenious:start",
+      "x": 280,
+      "y": 280,
+      "properties": { "width": 120, "height": 40 },
+      "text": { "x": 280, "y": 320, "value": "开始" }
+    },
+    {
+      "id": "apply",
+      "type": "ingenious:task",
+      "x": 480,
+      "y": 280,
+      "properties": {
+        "width": 120, "height": 40,
+        "assignee": "apply.operator",
+        "task_type": "Major",
+        "perform_type": "ANY",
+        "auto_execute": "N"
+      },
+      "text": { "x": 480, "y": 280, "value": "提交申请" }
+    },
+    {
+      "id": "custom1",
+      "type": "ingenious:custom",
+      "x": 680,
+      "y": 280,
+      "properties": {
+        "width": 120, "height": 40,
+        "clazz": "madong.workflow.tests.fixture.handler.AmountCalculateHandler",
+        "method_name": "calculate",
+        "args": "a,b",
+        "var": "f_resultAmount"
+      },
+      "text": { "x": 680, "y": 280, "value": "计算金额" }
+    },
+    {
+      "id": "end",
+      "type": "ingenious:end",
+      "x": 880,
+      "y": 280,
+      "properties": { "width": 120, "height": 40 },
+      "text": { "x": 880, "y": 320, "value": "结束" }
+    }
+  ],
+  "edges": [
+    { "id": "t1", "type": "ingenious:transition", "sourceNodeId": "start", "targetNodeId": "apply", "properties": {} },
+    { "id": "t2", "type": "ingenious:transition", "sourceNodeId": "apply", "targetNodeId": "custom1", "properties": {} },
+    { "id": "t3", "type": "ingenious:transition", "sourceNodeId": "custom1", "targetNodeId": "end", "properties": {} }
+  ]
+}

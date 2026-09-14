@@ -1,113 +1,123 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\parser;
+namespace madong\workflow\parser;
 
-use madong\ingenious\core\ServiceContext;
-use madong\ingenious\libs\utils\ArrayHelper;
-use madong\helper\Dict;
-use madong\ingenious\libs\utils\PropertyCopier;
-use madong\ingenious\model\logicflow\LfEdge;
-use madong\ingenious\model\logicflow\LfModel;
-use madong\ingenious\model\logicflow\LfNode;
-use madong\ingenious\model\ProcessModel;
-use madong\ingenious\model\TaskModel;
+use madong\workflow\model\ProcessModel;
+use madong\workflow\model\NodeModel;
+use madong\workflow\model\builder\ProcessModelBuilder;
+use madong\workflow\parser\lf\{LfNode, LfEdge, LfModel};
 
 class ModelParser
 {
+    public function __construct(
+        private readonly NodeParserRegistry $registry,
+        private readonly ?DesignerParserRegistry $designerRegistry = null,
+    ) {}
 
-    /**
-     * 确保对象的实例化是在受控的环境中进行
-     */
-    private function __construct()
+    public function parse(string|array $input): ProcessModel
     {
+        $data = is_string($input) ? json_decode($input, true) : $input;
+        $lfModel = $this->parseLfModel($data);
+
+        $builder = (new ProcessModelBuilder())
+            ->name($lfModel->name)
+            ->displayName($lfModel->getDisplayName())
+            ->type($lfModel->type)
+            ->instanceUrl($lfModel->getInstanceUrl())
+            ->expireTime($lfModel->getExpireTime())
+            ->instanceNoClass($lfModel->getInstanceNoClass())
+            ->preInterceptors($lfModel->getPreInterceptors())
+            ->postInterceptors($lfModel->getPostInterceptors());
+
+        $edges = $this->buildLfEdges($lfModel);
+        foreach ($lfModel->nodes as $lfNode) {
+            $type = str_replace(NodeParser::NODE_TYPE_PREFIX, '', $lfNode->type);
+            $parser = $this->registry->find($type);
+            if ($parser !== null) {
+                $parser->parse($lfNode, $edges);
+                $builder->addNode($parser->build());
+            }
+        }
+
+        $processModel = $builder->build();
+        $this->connectTransitions($processModel);
+
+        return $processModel;
     }
 
-    /**
-     * parse
-     *
-     * @param $inputStream
-     *
-     * @return \madong\ingenious\model\ProcessModel
-     * @throws \ReflectionException
-     */
-    public static function parse($inputStream): ProcessModel
+    private function parseLfModel(array $data): LfModel
     {
-        $inputStream  = ArrayHelper::jsonToArray($inputStream);
-        $jsonObj      = ArrayHelper::arrayToObject($inputStream);
-        $lfModel      = PropertyCopier::jsonObjToLfModel($jsonObj, LfModel::class);
-        $processModel = new ProcessModel();
-        $nodes        = [];
-        $edges        = [];
-        foreach ($lfModel->getNodes() as $node) {
-            $properties = new Dict();
-            $properties->putAll($node->properties ?? (object)[]);
-            $node->properties = $properties;
-            $nodes[]          = PropertyCopier::jsonObjToLfModel($node, LfNode::class);;
+        if ($this->designerRegistry !== null) {
+            $designerParser = $this->designerRegistry->findByData($data);
+            if ($designerParser !== null) {
+                return $designerParser->parse($data);
+            }
         }
 
-        foreach ($lfModel->getEdges() as $edge) {
-            $properties = new Dict();
-            $properties->putAll($edge->properties ?? (object)[]);
-            $edge->properties = $properties;
-            $edges[]          = PropertyCopier::jsonObjToLfModel($edge, LfEdge::class);
+        $nodes = [];
+        foreach ($data['nodes'] ?? [] as $n) {
+            $text = $n['text']['value'] ?? ($n['text'] ?? null);
+            $props = $n['properties'] ?? null;
+            if ($props !== null) {
+                $props = (object) $props;
+            }
+            $nodes[] = new LfNode(
+                id: $n['id'],
+                type: $n['type'],
+                x: (float) ($n['x'] ?? 0),
+                y: (float) ($n['y'] ?? 0),
+                text: is_string($text) ? $text : null,
+                properties: $props,
+            );
         }
 
-        if (empty($nodes) || empty($edges)) {
-            return $processModel;
+        $edges = [];
+        foreach ($data['edges'] ?? [] as $e) {
+            $edgeText = $e['text']['value'] ?? ($e['text'] ?? null);
+            $edgeProps = $e['properties'] ?? null;
+            if ($edgeProps !== null) {
+                $edgeProps = (object) $edgeProps;
+            }
+            $edges[] = new LfEdge(
+                id: $e['id'],
+                sourceNodeId: $e['sourceNodeId'],
+                targetNodeId: $e['targetNodeId'],
+                type: $e['type'] ?? null,
+                text: is_string($edgeText) ? $edgeText : null,
+                properties: $edgeProps,
+            );
         }
-        // 流程定义基本信息
-        $processModel->setName($lfModel->getName());
-        $processModel->setDisplayName($lfModel->getDisplayName());
-        $processModel->setType($lfModel->getType());
-        $processModel->setInstanceUrl($lfModel->getInstanceUrl());
-        $processModel->setExpireTime($lfModel->getExpireTime());
-        $processModel->setInstanceNoClass($lfModel->getInstanceNoClass());
-        $processModel->setPostInterceptors($lfModel->getPostInterceptors());
-        $processModel->setPreInterceptors($lfModel->getPreInterceptors());
-        // 流程节点信息
-        foreach ($nodes as $node) {
-            $type       = str_replace(INodeParser::NODE_NAME_PREFIX, "", $node->getType());
-            $nodeParser = ServiceContext::find($type);
-            if ($nodeParser != null) {
-                $nodeParser->parse($node, $edges);
-                $nodeModel  = $nodeParser->getModel() ?? [];
-                $nodeAppend = $processModel->getNodes();
-                //追加新的任务nodes
-                $nodeAppend[] = $nodeParser->getModel();
-                $processModel->setNodes($nodeAppend);
-                //如果是Task任务节点追加到tasks list
-                if ($nodeModel instanceof TaskModel) {
-                    $tasksAppend   = $processModel->getTasks() ?? [];
-                    $tasksAppend[] = $nodeModel;
-                    $processModel->setTasks($tasksAppend);
+
+        return new LfModel(
+            name: $data['name'] ?? '',
+            display_name: $data['display_name'] ?? '',
+            type: $data['type'] ?? '',
+            instance_url: $data['instance_url'] ?? '',
+            expire_time: $data['expire_time'] ?? '',
+            instance_no_class: $data['instance_no_class'] ?? '',
+            pre_interceptors: $data['pre_interceptors'] ?? null,
+            post_interceptors: $data['post_interceptors'] ?? null,
+            nodes: $nodes,
+            edges: $edges,
+        );
+    }
+
+    private function buildLfEdges(LfModel $lfModel): array
+    {
+        return $lfModel->edges;
+    }
+
+    private function connectTransitions(ProcessModel $model): void
+    {
+        foreach ($model->getNodes() as $node) {
+            foreach ($node->outputs as $transition) {
+                $target = $model->getNode($transition->to);
+                if ($target !== null) {
+                    $transition->target = $target;
+                    $transition->source = $node;
+                    $target->inputs[] = $transition;
                 }
             }
         }
-        // 循环节点模型，构造输入边、输出边的source、target
-        foreach ($processModel->getNodes() as $node) {
-            foreach ($node->getOutputs() as $transition) {
-                $to = $transition->getTo();
-                foreach ($processModel->getNodes() as $node2) {
-                    if (strcasecmp($to, $node2->getName()) === 0) {
-                        $inputsAppend   = $node2->getInputs() ?? [];
-                        $inputsAppend[] = $transition;
-                        $node2->setInputs($inputsAppend);
-                        $transition->setTarget($node2);
-                    }
-                }
-            }
-        }
-        return $processModel;
     }
 }

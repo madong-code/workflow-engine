@@ -1,19 +1,18 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\interface\model;
+namespace madong\workflow\interface\model;
 
 interface IProcessTask
 {
+    public function getId(): string;
+    public function getProcessInstanceId(): string;
+    public function getTaskName(): string;
+    public function getTaskState(): string;
+    public function getTaskType(): string;
+    public function getPerformType(): string;
+    public function getOperator(): ?string;
+    public function getCreateTime(): int;
 
+    /** 兜底: 访问非标化字段 */
+    public function getData(string $key, mixed $default = null): mixed;
 }

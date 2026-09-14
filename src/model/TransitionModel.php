@@ -1,62 +1,51 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\model;
+namespace madong\workflow\model;
 
-use madong\ingenious\interface\IActionInterface;
-use madong\ingenious\interface\IExecution;
-use madong\ingenious\libs\traits\DynamicPropsTrait;
-use madong\ingenious\processor\handler\CreateTaskHandler;
-use madong\ingenious\processor\handler\StartSubProcessHandler;
+use madong\workflow\model\vo\TransitionPath;
 
-/**
- * @method getTarget()
- * @method setName($getId)
- * @method setTo($getTargetNodeId)
- * @method setSource(\madong\ingenious\model\NodeModel $nodeModel)
- * @method setExpr($getStr)
- * @method setTarget(mixed $nodeModel)
- * @method setEnabled(true $true)
- * @method getOutputs()
- * @method getTo()
- */
-class TransitionModel extends BaseModel implements IActionInterface
+final class TransitionModel extends BaseModel
 {
-    use DynamicPropsTrait;
-
-    private NodeModel $source; // 边源节点引用
-    private NodeModel $target; // 边目标节点引用
-    private string $to; // 目标节点名称
-    private string|null $expr; // 边表达式
-    private string $g; // 边点坐标集合(x1,y1;x2,y2,x3,y3……)开始、拐角、结束
-    private bool $enabled = false; // 是否可执行
+    public function __construct(
+        string $name = '',
+        public readonly ?string $expr = null,
+        public readonly ?TransitionPath $path = null,
+        public ?NodeModel $source = null,
+        public ?NodeModel $target = null,
+        public readonly string $to = '',
+        public bool $enabled = false,
+    ) {
+        parent::__construct($name);
+    }
 
     /**
-     * @param \madong\ingenious\interface\IExecution $execution
-     *
-     * @throws \ReflectionException
+     * 执行转移 — 遍历目标节点的输出边
      */
-    public function execute(IExecution $execution): void
+    public function execute(\madong\workflow\context\ExecutionContext $ctx): void
     {
-        if (!$this->enabled) return;
-        if ($this->target instanceof TaskModel) {
-            // 创建阻塞任务
-            $this->fire(new CreateTaskHandler($this->target), $execution);
-        } else if ($this->target instanceof SubProcessModel) {
-            // 如果为子流程，则启动子流程
-            $this->fire(new StartSubProcessHandler($this->target), $execution);
-        } else {
-            $this->target->execute($execution);
+        if ($this->target !== null) {
+            $this->target->execute($ctx);
         }
+    }
+
+    /**
+     * 评估表达式决定是否启用
+     */
+    public function evaluateEnabled(\madong\workflow\context\ExecutionContext $ctx): bool
+    {
+        if ($this->expr === null || $this->expr === '') {
+            $this->enabled = true;
+            return true;
+        }
+
+        $engine = $ctx->engine ?? null;
+        if ($engine !== null) {
+            $expressionEngine = $engine->getExpressionEngine();
+            $this->enabled = $expressionEngine->evaluateToBool($this->expr, $ctx->variables);
+        } else {
+            $this->enabled = true;
+        }
+
+        return $this->enabled;
     }
 }

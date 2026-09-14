@@ -1,19 +1,13 @@
 <?php
-/**
- *+------------------
- * ingenious
- *+------------------
- * Copyright (c) https://gitcode.com/motion-code  All rights reserved.
- *+------------------
- * Author: Mr. April (405784684@qq.com)
- *+------------------
- * Software Registration Number: 2024SR0694589
- * Official Website: https://madong.tech
- */
 
-namespace madong\ingenious\interface\model;
+namespace madong\workflow\interface\model;
 
 interface IProcessFormHistory
 {
+    public function getId(): string;
+    public function getProcessFormId(): string;
+    public function getContent(): ?string;
+    public function getCreateTime(): int;
 
+    public function getData(string $key, mixed $default = null): mixed;
 }
