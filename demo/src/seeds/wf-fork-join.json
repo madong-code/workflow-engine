@@ -1,0 +1,24 @@
+{
+  "name": "wf-fork-join",
+  "display_name": "并行分支流程",
+  "instance_url": "forkJoinForm",
+  "nodes": [
+    { "id": "start", "type": "ingenious:start", "x": 280, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 280, "y": 360, "value": "开始" } },
+    { "id": "fork", "type": "ingenious:fork", "x": 480, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 480, "y": 320, "value": "并行分支" } },
+    { "id": "taskA", "type": "ingenious:task", "x": 680, "y": 140, "properties": { "width": 120, "height": 40, "assignee": "taskA", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 680, "y": 140, "value": "分支A任务" } },
+    { "id": "taskB", "type": "ingenious:task", "x": 680, "y": 320, "properties": { "width": 120, "height": 40, "assignee": "taskB", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 680, "y": 320, "value": "分支B任务" } },
+    { "id": "taskC", "type": "ingenious:task", "x": 680, "y": 500, "properties": { "width": 120, "height": 40, "assignee": "taskC", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 680, "y": 500, "value": "分支C任务" } },
+    { "id": "join", "type": "ingenious:join", "x": 880, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 880, "y": 320, "value": "合并节点" } },
+    { "id": "end", "type": "ingenious:end", "x": 1080, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 1080, "y": 360, "value": "结束" } }
+  ],
+  "edges": [
+    { "id": "t1", "type": "ingenious:transition", "sourceNodeId": "start", "targetNodeId": "fork", "properties": {} },
+    { "id": "t2", "type": "ingenious:transition", "sourceNodeId": "fork", "targetNodeId": "taskA", "properties": {} },
+    { "id": "t3", "type": "ingenious:transition", "sourceNodeId": "fork", "targetNodeId": "taskB", "properties": {} },
+    { "id": "t4", "type": "ingenious:transition", "sourceNodeId": "fork", "targetNodeId": "taskC", "properties": {} },
+    { "id": "t5", "type": "ingenious:transition", "sourceNodeId": "taskA", "targetNodeId": "join", "properties": {} },
+    { "id": "t6", "type": "ingenious:transition", "sourceNodeId": "taskB", "targetNodeId": "join", "properties": {} },
+    { "id": "t7", "type": "ingenious:transition", "sourceNodeId": "taskC", "targetNodeId": "join", "properties": {} },
+    { "id": "t8", "type": "ingenious:transition", "sourceNodeId": "join", "targetNodeId": "end", "properties": {} }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "wf-leave",
+  "display_name": "请假流程",
+  "instance_url": "leaveForm",
+  "nodes": [
+    { "id": "start", "type": "ingenious:start", "x": 280, "y": 280, "properties": { "width": 120, "height": 40 }, "text": { "x": 280, "y": 320, "value": "开始" } },
+    { "id": "apply", "type": "ingenious:task", "x": 480, "y": 280, "properties": { "width": 120, "height": 40, "assignee": "apply.operator", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 480, "y": 280, "value": "请假申请" } },
+    { "id": "approveDept", "type": "ingenious:task", "x": 680, "y": 280, "properties": { "width": 120, "height": 40, "assignee": "dept_manager", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 680, "y": 280, "value": "部门领导审批" } },
+    { "id": "d1", "type": "ingenious:decision", "x": 880, "y": 280, "properties": { "width": 120, "height": 40 } },
+    { "id": "approveHr", "type": "ingenious:task", "x": 1080, "y": 100, "properties": { "width": 120, "height": 40, "assignee": "hr_manager", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 1080, "y": 100, "value": "人事审批" } },
+    { "id": "approveBoss", "type": "ingenious:task", "x": 1080, "y": 460, "properties": { "width": 120, "height": 40, "assignee": "boss_manager", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 1080, "y": 460, "value": "公司领导审批" } },
+    { "id": "end", "type": "ingenious:end", "x": 1280, "y": 280, "properties": { "width": 120, "height": 40 }, "text": { "x": 1280, "y": 320, "value": "结束" } }
+  ],
+  "edges": [
+    { "id": "t1", "type": "ingenious:transition", "sourceNodeId": "start", "targetNodeId": "apply", "properties": {} },
+    { "id": "t2", "type": "ingenious:transition", "sourceNodeId": "apply", "targetNodeId": "approveDept", "properties": {} },
+    { "id": "t3", "type": "ingenious:transition", "sourceNodeId": "approveDept", "targetNodeId": "d1", "properties": {} },
+    { "id": "t4", "type": "ingenious:transition", "sourceNodeId": "d1", "targetNodeId": "approveHr", "properties": { "expr": "#f_day<3" }, "text": { "value": "请假天数小于3" } },
+    { "id": "t5", "type": "ingenious:transition", "sourceNodeId": "d1", "targetNodeId": "approveBoss", "properties": { "expr": "#f_day>=3" }, "text": { "value": "请假天数大于等于3" } },
+    { "id": "t6", "type": "ingenious:transition", "sourceNodeId": "approveBoss", "targetNodeId": "end", "properties": {} },
+    { "id": "t7", "type": "ingenious:transition", "sourceNodeId": "approveHr", "targetNodeId": "end", "properties": {} }
+  ]
+}
