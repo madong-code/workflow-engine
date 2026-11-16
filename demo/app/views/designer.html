@@ -1,0 +1,175 @@
+<!-- 流程设计：定义列表 + visual-flow 设计器 iframe（postMessage：flow.ready / flow.load / flow.save） -->
+<section class="page" data-page="designer">
+  <div class="split">
+    <div class="left">
+      <div class="toolbar" style="padding:8px 8px 0;">
+        <button class="btn primary" id="btnNewDefine">新建定义</button>
+        <button class="btn" id="btnReloadDefines">刷新</button>
+      </div>
+      <ul class="define-list" id="defineList"></ul>
+    </div>
+    <div class="right">
+      <div class="toolbar" style="padding:8px 10px;border-bottom:1px solid var(--border);margin-bottom:0;">
+        <strong id="designerTitle" class="muted">未选中定义</strong>
+        <div class="spacer"></div>
+        <select id="designerMode">
+          <option value="canvas">画布模式</option>
+          <option value="dingtalk">钉钉模式</option>
+        </select>
+        <button class="btn" id="btnDesignSave" disabled>保存设计</button>
+        <button class="btn ok" id="btnPublish" disabled>发布</button>
+        <button class="btn" id="btnDesignPreview" disabled>预览</button>
+      </div>
+      <div id="designerHolder" style="flex:1 1 auto;min-height:0;display:flex;">
+        <div class="designer-tip" style="flex:1;">← 从左侧选择一条流程定义开始设计</div>
+      </div>
+      <iframe id="designerFrame" class="designer-frame" style="display:none;" src=""></iframe>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { defines: [], activeDefine: null, mode: 'canvas' };
+  let designerFrame, designerHolder, inited = false;
+
+  async function loadDefines() {
+    S.defines = await A.api('/defines');
+    const ul = document.getElementById('defineList');
+    ul.innerHTML = S.defines.map((d) => {
+      const pub = Number(d.state) === 1;
+      return '<li data-id="' + d.id + '" class="' + (S.activeDefine && S.activeDefine.id === d.id ? 'active' : '') + '">'
+        + '<div class="name">' + (d.display_name || d.name) + '</div>'
+        + '<div class="meta"><code>' + d.name + '</code> v' + d.version
+        + (pub ? '<span class="badge done">已发布</span>' : (Number(d.state) === 2 ? '<span class="badge reject">已禁用</span>' : '<span class="badge gray">草稿</span>'))
+        + (Number(d.is_active) === 1 ? '<span class="badge info">活动版本</span>' : '')
+        + '</div></li>';
+    }).join('') || '<li class="muted">暂无定义</li>';
+  }
+
+  async function openDesigner() {
+    designerHolder.style.display = 'none';
+    designerFrame.style.display = '';
+    // 模式切换需重建 iframe（组件 key 变化）
+    designerFrame.src = '/assets/ui/index.html?mode=' + S.mode + '&t=' + Date.now();
+  }
+
+  async function selectDefine(define) {
+    S.activeDefine = define;
+    document.getElementById('designerTitle').textContent = define ? (define.display_name || define.name) : '未选中定义';
+    ['btnDesignSave', 'btnPublish', 'btnDesignPreview'].forEach((id) => {
+      document.getElementById(id).disabled = !define;
+    });
+    await loadDefines();
+    if (define) await openDesigner();
+  }
+
+  function pushToDesigner(payload) {
+    designerFrame.contentWindow.postMessage(Object.assign({ type: 'flow.load' }, payload), '*');
+  }
+
+  function init() {
+    if (inited) return;
+    inited = true;
+    designerFrame = document.getElementById('designerFrame');
+    designerHolder = document.getElementById('designerHolder');
+
+    document.getElementById('defineList').addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-id]');
+      if (li) selectDefine(S.defines.find((d) => d.id === li.dataset.id));
+    });
+
+    document.getElementById('btnReloadDefines').addEventListener('click', () => {
+      loadDefines().catch((err) => A.message(err.message, 'error'));
+    });
+
+    document.getElementById('btnNewDefine').addEventListener('click', async () => {
+      const name = prompt('流程标识（英文，如 wf-demo）：');
+      if (!name) return;
+      const displayName = prompt('流程名称：', '演示流程') || name;
+      try {
+        const created = await A.api('/defines', { method: 'POST', body: { name, display_name: displayName, category: '演示流程' } });
+        A.message('创建成功', 'success');
+        await loadDefines();
+        selectDefine(S.defines.find((d) => d.id === created.id));
+      } catch (err) {
+        A.message('创建失败：' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('designerMode').addEventListener('change', (e) => {
+      S.mode = e.target.value;
+      if (S.activeDefine) openDesigner();
+    });
+
+    document.getElementById('btnPublish').addEventListener('click', async () => {
+      if (!S.activeDefine) return;
+      try {
+        await A.api('/defines/' + S.activeDefine.id + '/publish', { method: 'POST' });
+        A.message('发布成功：' + S.activeDefine.name, 'success');
+        await loadDefines();
+      } catch (err) {
+        A.message('发布失败：' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('btnDesignSave').addEventListener('click', () => {
+      A.message('请在画布右上角控制面板点击保存按钮（自动同步保存到后端）');
+    });
+
+    document.getElementById('btnDesignPreview').addEventListener('click', () => {
+      if (!S.activeDefine) return;
+      DetailDrawer.open({
+        title: '预览：' + (S.activeDefine.display_name || S.activeDefine.name),
+        instance: null,
+        tasks: [],
+        defineId: S.activeDefine.id,
+        highLight: {},
+      });
+    });
+
+    // iframe 消息：设计器就绪 → 载入定义；控制面板保存 → PUT 持久化
+    window.addEventListener('message', async (e) => {
+      const msg = e.data;
+      if (!msg || typeof msg !== 'object') return;
+
+      if (msg.type === 'flow.ready' && e.source === designerFrame.contentWindow) {
+        if (S.activeDefine) {
+          try {
+            const detail = await A.api('/defines/' + S.activeDefine.id);
+            pushToDesigner({ data: detail.content_json || {} });
+          } catch (err) {
+            A.message('定义载入失败：' + err.message, 'error');
+          }
+        }
+        return;
+      }
+
+      if (msg.type === 'flow.save' && e.source === designerFrame.contentWindow) {
+        if (!S.activeDefine) return;
+        try {
+          await A.api('/defines/' + S.activeDefine.id, { method: 'PUT', body: { content: msg.data } });
+          A.message('流程图已保存：' + S.activeDefine.name, 'success');
+        } catch (err) {
+          A.message('保存失败：' + err.message, 'error');
+        }
+      }
+    });
+  }
+
+  async function reload() {
+    init();
+    await loadDefines();
+    // 流程定义页「设计」跳转：读取 pending 定义并自动选中
+    const pending = localStorage.getItem('wf_designer_pending');
+    if (pending) {
+      localStorage.removeItem('wf_designer_pending');
+      const define = S.defines.find((d) => d.id === pending);
+      if (define) await selectDefine(define);
+    }
+  }
+
+  App.registerPage('designer', { reload });
+})();
+</script>

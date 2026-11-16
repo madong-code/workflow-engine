@@ -1,0 +1,80 @@
+<!-- 我的抄送：抄送给我的实例列表 → 详情抽屉（Tabs：详情 / 流程图 / 审批记录） -->
+<section class="page" data-page="cc">
+  <div class="toolbar">
+    <h2>我的抄送</h2>
+    <span class="muted">当前用户：<span id="ccUser" class="muted"></span></span>
+    <input class="search-input" id="ccSearch" placeholder="搜索标题/流程...">
+    <button class="btn" id="btnReloadCc">刷新</button>
+  </div>
+  <div id="ccList"></div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { rows: [], keyword: '' };
+  let tbl;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function filtered() {
+    const kw = S.keyword.trim().toLowerCase();
+    if (!kw) return S.rows;
+    return S.rows.filter((c) =>
+      ((c.title || '') + (c.define_name || '')).toLowerCase().includes(kw)
+    );
+  }
+
+  function render() {
+    tbl.update(filtered(), S.keyword ? '没有匹配的抄送' : '暂无抄送，他人抄送时会出现在这里');
+  }
+
+  async function loadCcs() {
+    document.getElementById('ccUser').textContent = A.userLabel(A.state.operator);
+    try {
+      S.rows = await A.api('/ccs?operator=' + encodeURIComponent(A.state.operator));
+      render();
+    } catch (err) {
+      A.message('抄送列表加载失败：' + err.message, 'error');
+      tbl.update([], err.message);
+    }
+  }
+
+  function init() {
+    if (window.__ccInited) return;
+    window.__ccInited = true;
+
+    tbl = A.mountTable(document.getElementById('ccList'), {
+      id: 'cc',
+      empty: '暂无抄送，他人抄送时会出现在这里',
+      cols: [[
+        { title: '标题', minWidth: 180, templet: (c) => '<strong>' + esc(c.title || '-') + '</strong>' },
+        { title: '流程', minWidth: 140, templet: (c) => '<code class="muted">' + esc(c.define_name || '-') + '</code>' },
+        { title: '发起人', minWidth: 90, templet: (c) => esc(A.userLabel(c.instance_operator)) },
+        { title: '抄送时间', width: 150, templet: (c) => '<span class="muted">' + A.fmtTime(c.create_time) + '</span>' },
+        { title: '实例状态', width: 96, templet: (c) => A.badge(A.INSTANCE_STATES, c.instance_state) },
+        { title: '操作', width: 168, templet: (c) => '<button class="btn sm" lay-event="detail" data-detail="' + esc(c.process_instance_id) + '">详情</button>' },
+      ]],
+      onTool: (obj) => {
+        if (obj.event === 'detail') DetailDrawer.openInstance(obj.data.process_instance_id).catch((err) => A.message(err.message, 'error'));
+      },
+    });
+
+    document.getElementById('ccSearch').addEventListener('input', (e) => {
+      S.keyword = e.target.value;
+      render();
+    });
+    document.getElementById('btnReloadCc').addEventListener('click', loadCcs);
+  }
+
+  async function reload() {
+    init();
+    await loadCcs();
+  }
+
+  App.registerPage('cc', { reload });
+})();
+</script>

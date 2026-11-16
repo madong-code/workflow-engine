@@ -1,12 +1,20 @@
-# Madong Workflow
+# Madong Workflow（Ingenious v3）
 
-> PHP 8.1+ 工作流引擎 | 包名：`madong/workflow` | 命名空间：`madong\workflow`
->
-> 仓库：[Gitee · motion-code/workflow-engine](https://gitee.com/motion-code/workflow-engine) · [GitHub 镜像 · madong-code/workflow-engine](https://github.com/madong-code/workflow-engine)
+> **Ingenious v3 工作流引擎** | PHP 8.1+ | 包名：`madong/workflow` | 命名空间：`madong\workflow`
 >
 > 当前为 **v3**（包名 `madong/workflow`）；v1（`madong/ingenious`）与 v2 为历史版本，早期仓库路径 [ingenstream/ingenious](https://gitee.com/ingenstream/ingenious)，已停止演进。
 
-Madong Workflow 是一套基于 **PHP 8.1+ OOP** 设计的轻量、可扩展工作流引擎（演进自 Ingenious，命名空间与包名已独立）。它能够**解析流程设计器导出的 json 流程定义**并驱动流程流转，支持决策分支、并行合并、会签、自定义节点、事件、拦截器、模块化、子流程等能力。
+**仓库位置**
+
+| 平台 | 定位 | 地址 |
+|------|------|------|
+| GitHub | 主仓库 | [github.com/madong-code/workflow-engine](https://github.com/madong-code/workflow-engine) |
+| Gitee | 镜像 | [gitee.com/motion-code/workflow-engine](https://gitee.com/motion-code/workflow-engine) |
+| GitCode | 镜像 | [gitcode.com/motion-code/workflow-engine](https://gitcode.com/motion-code/workflow-engine) |
+
+> Composer VCS 安装以 GitHub 主仓库为默认源，Gitee / GitCode 镜像可在网络受限时替换 `repositories.url`。
+
+Madong Workflow（**Ingenious v3**）是一套基于 **PHP 8.1+ OOP** 设计的轻量、可扩展工作流引擎（演进自 Ingenious，命名空间与包名已独立）。它能够**解析流程设计器导出的 json 流程定义**并驱动流程流转，支持决策分支、并行合并、会签、自定义节点、事件、拦截器、模块化、子流程等能力。
 
 ## ✨ 特性
 
@@ -19,6 +27,25 @@ Madong Workflow 是一套基于 **PHP 8.1+ OOP** 设计的轻量、可扩展工�
 - **模块化**：Module 插拔扩展（依赖拓扑排序）
 - **服务可替换**：通过 `I*Service` 接口对接任意持久化实现
 - **开箱即用**：内存服务 + 真实流程 json 集成测试（86 tests / 184 assertions）
+- **可运行 Demo**：内置流程中心完整示例（PDO + 原生 SQL + 原生 PHP，零构建链依赖，FPM 直部）
+
+## 🎯 Demo 示例
+
+`demo/` 目录提供一个开箱即跑的**流程中心完整示例**：PDO + 原生 SQL 存储层、原生 PHP REST API、iframe 嵌 visual-flow 设计器（画布/钉钉双模式），页面布局对标 jeeflow 演示（顶栏 + 左侧菜单 + 右侧详情抽屉）。覆盖工作台、发起申请、待办/已办/抄送、流程定义与设计、审批委托、流程监控等完整场景，内置 5 条种子流程（请假 / 差旅报销 / 会签 / 并行分支 / 自定义节点）。
+
+**运行方式**（均为请求级执行，无常驻进程依赖）：
+
+```shell
+# 方式一：PHP 内置服务器（本地开发）
+php -S 127.0.0.1:8100 -t . demo/public/index.php
+# 浏览器打开 http://127.0.0.1:8100/
+
+# 方式二：php-fpm + nginx（部署）
+# 配置模板见 demo/config/nginx.conf.example：
+# root 指向包根，/assets/* 静态直出，其余请求转发 demo/public/index.php 前端控制器
+```
+
+数据库连接通过 `demo/config/.env` 配置（模板 `.env.example`），首次访问自动建表并写入种子数据。冒烟测试与功能清单详见 [demo/README.md](demo/README.md)（`php demo/tests/smoke.php`，38 条断言）。
 
 ## 📦 安装
 
@@ -38,7 +65,7 @@ Madong Workflow 是一套基于 **PHP 8.1+ OOP** 设计的轻量、可扩展工�
 }
 ```
 
-GitHub 镜像源：`"url": "https://github.com/madong-code/workflow-engine.git"`
+镜像源（网络受限时替换上方 `repositories.url`）：`"url": "https://gitee.com/motion-code/workflow-engine.git"` 或 `"url": "https://gitcode.com/madong-code/workflow-engine.git"`
 
 ```bash
 composer update madong/workflow

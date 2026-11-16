@@ -1,0 +1,91 @@
+<!-- 流程监控：状态统计卡 + 运行中实例列表（分页）；轨迹右侧抽屉（时间线 + 流程图高亮） -->
+<section class="page" data-page="monitor">
+  <div class="toolbar">
+    <h2>流程监控</h2>
+    <span class="muted">全量实例 / 任务状态统计（不限当前用户）</span>
+    <div class="spacer"></div>
+    <button class="btn" id="btnReloadMonitor">刷新</button>
+  </div>
+  <div id="monitorBody"></div>
+  <h3 class="block-title">运行中实例</h3>
+  <div id="monitorTable"></div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { data: null };
+  let tbl;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function render() {
+    const body = document.getElementById('monitorBody');
+    if (!S.data) {
+      body.innerHTML = '<div class="empty">暂无监控数据</div>';
+      return;
+    }
+    const iMap = {};
+    S.data.instance_states.forEach((r) => { iMap[r.state] = Number(r.c); });
+    const tMap = {};
+    S.data.task_states.forEach((r) => { tMap[r.task_state] = Number(r.c); });
+    const sum = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+
+    const stats = '<div class="stats">'
+      + '<div class="stat"><div class="num">' + sum(iMap) + '</div><div class="label">实例总数</div></div>'
+      + '<div class="stat"><div class="num" style="color:var(--primary)">' + (iMap[0] || 0) + '</div><div class="label">运行中</div></div>'
+      + '<div class="stat"><div class="num" style="color:var(--ok)">' + (iMap[1] || 0) + '</div><div class="label">已完成</div></div>'
+      + '<div class="stat"><div class="num" style="color:var(--danger)">' + (iMap[2] || 0) + '</div><div class="label">已拒绝</div></div>'
+      + '<div class="stat"><div class="num">' + (tMap[0] || 0) + '</div><div class="label">待办任务</div></div>'
+      + '<div class="stat"><div class="num" style="color:var(--ok)">' + (tMap[1] || 0) + '</div><div class="label">已办结任务</div></div>'
+      + '</div>';
+    body.innerHTML = stats;
+    mountTableOnce();  // 统计卡进布局后再挂载表格，全屏高度推算才准确
+    tbl.update(S.data.running || [], '暂无运行中实例');
+  }
+
+  async function loadMonitor() {
+    try {
+      S.data = await A.api('/monitor/overview');
+      render();
+    } catch (err) {
+      A.message('监控数据加载失败：' + err.message, 'error');
+    }
+  }
+
+  function mountTableOnce() {
+    if (tbl) return;
+    tbl = A.mountTable(document.getElementById('monitorTable'), {
+      id: 'monitor',
+      empty: '暂无运行中实例',
+      cols: [[
+        { title: '标题', minWidth: 180, templet: (i) => '<strong>' + esc(i.title || i.display_name) + '</strong>' },
+        { title: '流程', minWidth: 120, templet: (i) => esc(i.display_name || i.define_name || '-') },
+        { title: '发起人', minWidth: 90, templet: (i) => esc(A.userLabel(i.operator)) },
+        { title: '发起时间', width: 140, templet: (i) => '<span class="muted">' + A.fmtTime(i.create_time) + '</span>' },
+        { title: '操作', width: 168, templet: (i) => '<button class="btn sm" lay-event="detail" data-detail="' + i.id + '">轨迹</button>' },
+      ]],
+      onTool: (obj) => {
+        if (obj.event === 'detail') DetailDrawer.openInstance(obj.data.id).catch((err) => A.message('详情加载失败：' + err.message, 'error'));
+      },
+    });
+  }
+
+  function init() {
+    if (window.__monitorInited) return;
+    window.__monitorInited = true;
+
+    document.getElementById('btnReloadMonitor').addEventListener('click', loadMonitor);
+  }
+
+  async function reload() {
+    init();
+    await loadMonitor();
+  }
+
+  App.registerPage('monitor', { reload });
+})();
+</script>

@@ -1,0 +1,187 @@
+<!-- 流程定义：定义表格化管理（新建 / 设计 / 发布 / 预览 / 删除）；设计跳转流程设计页并自动选中 -->
+<section class="page" data-page="definitions">
+  <div class="toolbar">
+    <h2>流程定义</h2>
+    <input class="search-input" id="defSearch" placeholder="搜索名称/编码...">
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnNewDef">新建定义</button>
+    <button class="btn" id="btnReloadDefs">刷新</button>
+  </div>
+  <div id="defList"></div>
+
+  <div class="modal-mask" id="defMask">
+    <div class="modal" style="width:min(480px,92vw);">
+      <div class="modal-head">
+        <h3>新建流程定义</h3>
+        <button class="modal-close" id="defClose" title="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-item">
+          <label>流程标识（英文）</label>
+          <input id="defName" placeholder="如 wf-demo-trip" class="input">
+        </div>
+        <div class="form-item">
+          <label>流程名称</label>
+          <input id="defDisplayName" placeholder="如 出差申请" class="input">
+        </div>
+        <div class="form-item">
+          <label>分类（可选）</label>
+          <input id="defCategory" placeholder="默认：演示流程" class="input">
+        </div>
+        <div class="help">创建后自动进入流程设计页开始画流程；发布后才可在「发起申请」可见。</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="defCancel">取消</button>
+        <button class="btn primary" id="defSubmit">创建并设计</button>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { rows: [], keyword: '' };
+  let tbl;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function stateBadge(d) {
+    const s = Number(d.state);
+    if (s === 1) return '<span class="badge done">已发布</span>';
+    if (s === 2) return '<span class="badge reject">已禁用</span>';
+    return '<span class="badge gray">草稿</span>';
+  }
+
+  function filtered() {
+    const kw = S.keyword.trim().toLowerCase();
+    if (!kw) return S.rows;
+    return S.rows.filter((d) =>
+      ((d.display_name || '') + (d.name || '') + (d.category || '')).toLowerCase().includes(kw)
+    );
+  }
+
+  function render() {
+    tbl.update(filtered(), S.keyword ? '没有匹配的定义' : '暂无流程定义，点击「新建定义」开始');
+  }
+
+  async function loadDefs() {
+    try {
+      S.rows = await A.api('/defines');
+      render();
+    } catch (err) {
+      A.message('定义加载失败：' + err.message, 'error');
+      tbl.update([], err.message);
+    }
+  }
+
+  /** 跳转流程设计页并自动选中（designer 页读取 wf_designer_pending） */
+  function gotoDesigner(id) {
+    localStorage.setItem('wf_designer_pending', id);
+    A.openPage('designer');
+  }
+
+  function openCreate() {
+    document.getElementById('defName').value = '';
+    document.getElementById('defDisplayName').value = '';
+    document.getElementById('defCategory').value = '';
+    document.getElementById('defMask').classList.add('show');
+  }
+
+  function closeCreate() {
+    document.getElementById('defMask').classList.remove('show');
+  }
+
+  async function submitCreate() {
+    const name = document.getElementById('defName').value.trim();
+    const displayName = document.getElementById('defDisplayName').value.trim() || name;
+    const category = document.getElementById('defCategory').value.trim() || '演示流程';
+    if (!name) {
+      A.message('请填写流程标识', 'error');
+      return;
+    }
+    try {
+      const created = await A.api('/defines', { method: 'POST', body: { name, display_name: displayName, category } });
+      A.message('创建成功，开始设计流程', 'success');
+      closeCreate();
+      gotoDesigner(created.id);
+    } catch (err) {
+      A.message('创建失败：' + err.message, 'error');
+    }
+  }
+
+  function init() {
+    if (window.__defsInited) return;
+    window.__defsInited = true;
+
+    tbl = A.mountTable(document.getElementById('defList'), {
+      id: 'defines',
+      empty: '暂无流程定义，点击「新建定义」开始',
+      cols: [[
+        { title: '流程名称', minWidth: 150, templet: (d) => '<strong>' + esc(d.display_name || d.name) + '</strong>' },
+        { title: '编码', minWidth: 140, templet: (d) => '<code class="muted">' + esc(d.name) + '</code>' },
+        { title: '分类', width: 100, templet: (d) => '<span class="muted">' + esc(d.category || '-') + '</span>' },
+        { title: '版本', width: 70, templet: (d) => 'v' + esc(d.version) },
+        { title: '状态', width: 170, templet: (d) => stateBadge(d)
+            + (Number(d.is_active) === 1 ? ' <span class="badge info">活动版本</span>' : '') },
+        { title: '更新时间', width: 150, templet: (d) => '<span class="muted">' + A.fmtTime(d.update_time || d.create_time) + '</span>' },
+        { title: '操作', width: 472, templet: (d) =>
+            '<button class="btn sm primary" lay-event="design" data-design="' + esc(d.id) + '">设计</button> '
+            + (Number(d.state) !== 1 ? '<button class="btn sm ok" lay-event="publish" data-publish="' + esc(d.id) + '">发布</button> ' : '')
+            + '<button class="btn sm" lay-event="preview" data-preview="' + esc(d.id) + '">预览</button> '
+            + '<button class="btn sm danger" lay-event="del" data-del="' + esc(d.id) + '">删除</button>' },
+      ]],
+      onTool: async (obj) => {
+        const d = obj.data;
+        const name = d.display_name || d.name;
+        try {
+          if (obj.event === 'design') {
+            gotoDesigner(d.id);
+          } else if (obj.event === 'publish') {
+            await A.api('/defines/' + d.id + '/publish', { method: 'POST' });
+            A.message('发布成功', 'success');
+            await loadDefs();
+          } else if (obj.event === 'preview') {
+            DetailDrawer.open({
+              title: '预览：' + name,
+              instance: null,
+              tasks: [],
+              defineId: d.id,
+              highLight: {},
+            });
+          } else if (obj.event === 'del' && confirm('确认删除流程「' + name + '」？')) {
+            await A.api('/defines/' + d.id, { method: 'DELETE' });
+            A.message('删除成功', 'success');
+            await loadDefs();
+          }
+        } catch (err) {
+          A.message(err.message, 'error');
+        }
+      },
+    });
+
+    document.getElementById('defSearch').addEventListener('input', (e) => {
+      S.keyword = e.target.value;
+      render();
+    });
+    document.getElementById('btnNewDef').addEventListener('click', openCreate);
+    document.getElementById('btnReloadDefs').addEventListener('click', loadDefs);
+    document.getElementById('defClose').addEventListener('click', closeCreate);
+    document.getElementById('defCancel').addEventListener('click', closeCreate);
+    document.getElementById('defSubmit').addEventListener('click', submitCreate);
+    document.getElementById('defMask').addEventListener('click', (e) => {
+      if (e.target.id === 'defMask') closeCreate();
+    });
+  }
+
+  async function reload() {
+    init();
+    await loadDefs();
+  }
+
+  App.registerPage('definitions', { reload });
+})();
+</script>

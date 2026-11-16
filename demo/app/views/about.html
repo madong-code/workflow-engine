@@ -1,0 +1,163 @@
+<!-- 关于：扩展包信息（composer.json 权威来源，Ingenious v3 工作流引擎定位）+ 运行环境 + 前端依赖 + 功能板块与许可（内容对齐 README） -->
+<section class="page" data-page="about">
+  <div class="toolbar">
+    <h2>关于</h2>
+    <span class="muted">扩展包与 demo 运行环境信息（composer.json 为权威来源）</span>
+    <div class="spacer"></div>
+    <button class="btn" id="btnReloadAbout">刷新</button>
+  </div>
+  <div class="about-body" id="aboutBody">
+    <div class="empty">加载中…</div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+
+  let S = { data: null };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 前端依赖清单（vendor 资产版本头注释静态核对；纯前端运行时无法可靠探测，单点维护于此）
+  const FRONTEND_DEPS = [
+    { name: 'Bootstrap', version: '5.3.3', file: 'assets/vendor/bootstrap/', usage: '基础样式层（reboot / 工具类），主题由 common.css 覆盖' },
+    { name: 'Layui', version: '2.13.9', file: 'assets/vendor/layui/', usage: '表格组件层（layui.table 列表渲染 + 内置分页）' },
+    { name: 'Vue', version: '3.5.34', file: 'assets/ui/vendor/vue.global.prod.js', usage: '设计器 / viewer 运行时' },
+    { name: 'visual-flow', version: 'LogicFlow 内核', file: 'assets/ui/vendor/visual-flow.umd.cjs', usage: '流程图设计与查看（画布 / 钉钉双模式）' },
+  ];
+
+  // 功能板块简介（与 README「功能总览」保持一致）
+  const MODULES = [
+    ['工作台', '默认首页：个人卡（待办/在办/发起/抄送）+ 全局览 8 卡 + 近 7 天趋势 + 流程 Top 5 + 状态分布 + 最近待办'],
+    ['发起申请', '已发布定义卡片、按流程预置变量表单（天数/金额/处理人/会签成员）、一键发起'],
+    ['我的待办', '按 operator 查询待办（含受托代办的委托人待办，带「受托自」徽标）；同意 / 退回发起节点 / 拒绝终止 + 详情抽屉'],
+    ['我发起的', '实例列表与状态徽标；详情抽屉（Tabs：详情/流程图/审批记录）'],
+    ['我的已办', '办理记录（提交类型、意见、办理时间、实例状态，含受托代办记录）；详情抽屉'],
+    ['我的抄送', '被抄送实例列表；详情抽屉；实例详情内可发起抄送他人'],
+    ['流程定义', '定义表格化管理：新建（弹窗）/ 设计（跳设计页自动选中）/ 发布 / 预览 / 删除，搜索 + 分页'],
+    ['流程设计', '定义列表（新建/删除/发布/版本）、visual-flow 画布/钉钉双模式设计器、保存回传、发布生效'],
+    ['我的委托', '委托管理：我委托的（启停/删除）/ 委托给我的；生效委托使受托人可见并代办委托人待办（act_as）'],
+    ['流程监控', '实例/任务状态统计 + 运行中实例列表；详情抽屉'],
+    ['关于', '扩展包元信息、运行环境、前端依赖清单与许可信息'],
+  ];
+
+  function kv(label, value) {
+    return '<div class="d-field"><span class="d-label">' + esc(label) + '</span>'
+      + '<span class="d-value">' + (value == null || value === '' ? '-' : value) + '</span></div>';
+  }
+
+  function render() {
+    const box = document.getElementById('aboutBody');
+    if (!S.data) {
+      box.innerHTML = '<div class="empty">暂无关于信息</div>';
+      return;
+    }
+    const pkg = S.data.package || {};
+    const env = S.data.environment || {};
+    const require = pkg.require || {};
+    const authors = pkg.authors || [];
+    const keywords = pkg.keywords || [];
+
+    // 扩展包信息 + composer 依赖（composer.json 动态解析）
+    const composerDeps = Object.keys(require).map((k) =>
+      '<div class="dep-item"><code>' + esc(k) + '</code><span class="muted">' + esc(require[k]) + '</span></div>'
+    ).join('') || '<div class="muted">无</div>';
+
+    const packageCard = '<div class="panel">'
+      + '<h3>扩展包 <small>composer.json</small></h3>'
+      + '<div class="about-head">'
+      + '<span class="logo">' + esc((pkg.name || '?').slice(0, 1).toUpperCase()) + '</span>'
+      + '<div><div class="about-pkg-name">' + esc(pkg.name || '-') + '</div>'
+      + '<div class="muted" style="font-size:12px;">' + esc(pkg.version ? 'v' + pkg.version : '版本未固定（随仓库 tag）') + '</div></div>'
+      + (pkg.license ? '<span class="badge gray" style="margin-left:auto;">' + esc(pkg.license) + '</span>' : '')
+      + '</div>'
+      + '<p class="about-desc">' + esc(pkg.description || '-') + '</p>'
+      + (keywords.length
+        ? '<div class="checks" style="margin-bottom:10px;">' + keywords.map((k) =>
+            '<span class="ext-chip">' + esc(k) + '</span>').join('') + '</div>'
+        : '')
+      + '<div class="d-form-grid">'
+      + kv('版本', pkg.version ? '<code>' + esc(pkg.version) + '</code>' : '-')
+      + kv('许可', pkg.license ? '<code>' + esc(pkg.license) + '</code>' : '-')
+      + kv('PHP 要求', esc(require['php'] || '-'))
+      + kv('作者', authors.length ? esc(authors.map((a) => a.name).filter(Boolean).join('、')) : '-')
+      + '</div>'
+      + '<h4 class="d-section">composer 依赖</h4>'
+      + '<div class="about-deps">' + composerDeps + '</div>'
+      + '</div>';
+
+    // 运行环境（PHP_VERSION / SAPI / OS / 关键扩展 动态读取）
+    const envCard = '<div class="panel">'
+      + '<h3>运行环境 <small>PHP 动态读取</small></h3>'
+      + '<div class="d-form-grid">'
+      + kv('PHP 版本', '<code>' + esc(env.php || '-') + '</code>')
+      + kv('SAPI', esc(env.sapi || '-'))
+      + kv('操作系统', esc(env.os || '-'))
+      + kv('数据库', 'MySQL（PDO + 原生 SQL）')
+      + '</div>'
+      + '<h4 class="d-section">关键扩展</h4>'
+      + '<div class="checks">'
+      + (env.extensions || []).map((e) => '<span class="ext-chip">' + esc(e) + '</span>').join('')
+      + '</div>'
+      + '<h4 class="d-section">演示用户</h4>'
+      + '<div class="muted" style="font-size:13px;line-height:1.9;">'
+      + '张三 <code>user1</code>（发起人）· 钱七 <code>dept_manager</code> · 李四 <code>hr_manager</code> · 王五 <code>boss_manager</code> · 赵六 <code>finance_manager</code>'
+      + '</div>'
+      + '</div>';
+
+    // 前端依赖（静态清单）
+    const feCard = '<div class="panel">'
+      + '<h3>前端依赖 <small>vendor 本地化，零 CDN 外链</small></h3>'
+      + FRONTEND_DEPS.map((d) =>
+          '<div class="dep-row">'
+          + '<div class="dep-name"><strong>' + esc(d.name) + '</strong> <span class="muted">v' + esc(d.version) + '</span></div>'
+          + '<code class="dep-file">' + esc(d.file) + '</code>'
+          + '<div class="dep-usage muted">' + esc(d.usage) + '</div>'
+          + '</div>'
+        ).join('')
+      + '</div>';
+
+    // 功能板块（与 README 一致）
+    const modulesCard = '<div class="panel">'
+      + '<h3>功能板块 <small>共 ' + MODULES.length + ' 项</small></h3>'
+      + '<div class="about-modules">'
+      + MODULES.map((m) =>
+          '<div class="module-row"><span class="module-name">' + esc(m[0]) + '</span>'
+          + '<span class="module-desc">' + esc(m[1]) + '</span></div>'
+        ).join('')
+      + '</div></div>';
+
+    box.innerHTML = '<div class="about-grid">' + packageCard + envCard + '</div>'
+      + '<div class="about-grid" style="grid-template-columns:1fr;">' + feCard + modulesCard + '</div>';
+  }
+
+  async function loadAbout() {
+    const box = document.getElementById('aboutBody');
+    try {
+      S.data = await A.api('/about');
+      render();
+    } catch (err) {
+      box.innerHTML = '<div class="empty">' + esc(err.message) + '</div>';
+    }
+  }
+
+  function init() {
+    if (window.__aboutInited) return;
+    window.__aboutInited = true;
+    document.getElementById('btnReloadAbout').addEventListener('click', () => {
+      loadAbout().catch((err) => A.message(err.message, 'error'));
+    });
+  }
+
+  async function reload() {
+    init();
+    await loadAbout();
+  }
+
+  App.registerPage('about', { reload });
+})();
+</script>

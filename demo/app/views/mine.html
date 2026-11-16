@@ -1,0 +1,81 @@
+<!-- 我的申请：实例列表 + 搜索过滤 + 分页；详情右侧抽屉（轨迹时间线 + 流程图高亮） -->
+<section class="page" data-page="mine">
+  <div class="toolbar">
+    <h2>我的申请</h2>
+    <span class="muted">当前用户：<span id="mineUser" class="muted"></span></span>
+    <input class="search-input" id="mineSearch" placeholder="搜索流程名...">
+    <button class="btn" id="btnReloadMine">刷新</button>
+  </div>
+  <div id="mineList"></div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { rows: [], keyword: '' };
+  let tbl;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function filtered() {
+    const kw = S.keyword.trim().toLowerCase();
+    if (!kw) return S.rows;
+    return S.rows.filter((i) =>
+      ((i.title || '') + (i.display_name || '') + (i.define_name || '')).toLowerCase().includes(kw)
+    );
+  }
+
+  function render() {
+    tbl.update(filtered(), S.keyword ? '没有匹配的申请' : '当前用户暂无申请');
+  }
+
+  async function loadMine() {
+    document.getElementById('mineUser').textContent = A.userLabel(A.state.operator);
+    try {
+      S.rows = await A.api('/instances?operator=' + encodeURIComponent(A.state.operator));
+      render();
+    } catch (err) {
+      A.message('申请加载失败：' + err.message, 'error');
+      tbl.update([], err.message);
+    }
+  }
+
+  function init() {
+    if (window.__mineInited) return;
+    window.__mineInited = true;
+
+    tbl = A.mountTable(document.getElementById('mineList'), {
+      id: 'mine',
+      empty: '当前用户暂无申请',
+      cols: [[
+        { title: '标题', minWidth: 180, templet: (i) => '<strong>' + esc(i.title || i.display_name) + '</strong>' },
+        { title: '流程', minWidth: 120, templet: (i) => esc(i.display_name || i.define_name || '-') },
+        { title: '状态', width: 90, templet: (i) => A.badge(A.INSTANCE_STATES, i.state) },
+        { title: '当前节点', minWidth: 120, templet: (i) => esc((i.active_nodes || []).join('、') || '-') },
+        { title: '发起时间', width: 150, templet: (i) => '<span class="muted">' + A.fmtTime(i.create_time) + '</span>' },
+        { title: '结束时间', width: 150, templet: (i) => '<span class="muted">' + A.fmtTime(i.end_time) + '</span>' },
+        { title: '操作', width: 168, templet: (i) => '<button class="btn sm" lay-event="detail" data-detail="' + i.id + '">详情</button>' },
+      ]],
+      onTool: (obj) => {
+        if (obj.event === 'detail') DetailDrawer.openInstance(obj.data.id).catch((err) => A.message('详情加载失败：' + err.message, 'error'));
+      },
+    });
+
+    document.getElementById('mineSearch').addEventListener('input', (e) => {
+      S.keyword = e.target.value;
+      render();
+    });
+    document.getElementById('btnReloadMine').addEventListener('click', loadMine);
+  }
+
+  async function reload() {
+    init();
+    await loadMine();
+  }
+
+  App.registerPage('mine', { reload });
+})();
+</script>

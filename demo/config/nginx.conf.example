@@ -1,0 +1,41 @@
+# madong/workflow demo · nginx 配置示例
+#
+# 与 stepcore demo 同款接法：root 指向 packages/workflow 包根，
+# 动态请求转发到 demo/public/index.php 前端控制器（约定路由：
+# / 宿主壳、/views/{name}.html 栏目页、/assets/* 静态资源
+#（含 /assets/ui/ 设计器站点）、/api/* 接口）。
+# 将 <WORKFLOW_ROOT> 替换为 packages/workflow 的绝对路径。
+
+server {
+    listen 8100;
+    server_name workflow-demo.local;
+
+    # 包根为文档根：/ui/* 设计器静态资源由 nginx 直接托管
+    root <WORKFLOW_ROOT>;
+    index index.html;
+
+    charset utf-8;
+    client_max_body_size 10m;
+
+    # 拒绝 PHP 源码直出（页面/接口统一走前端控制器）
+    location ~* \.php$ {
+        deny all;
+    }
+
+    # demo 静态资源（/assets/* → demo/public/assets/，nginx 直接托管，
+    # 含设计器站点 /assets/ui/ 与 vendor 体积较大的 umd.cjs）
+    location /assets/ {
+        alias <WORKFLOW_ROOT>/demo/public/assets/;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    # 其余请求（/ 宿主壳、/views/* 栏目页、/api/* 接口）
+    # 一律转前端控制器，由其完成安全 readfile 与路由分发
+    location / {
+        fastcgi_pass   127.0.0.1:9000;
+        fastcgi_index  demo/public/index.php;
+        fastcgi_param  SCRIPT_FILENAME <WORKFLOW_ROOT>/demo/public/index.php;
+        fastcgi_param  SCRIPT_NAME     /demo/public/index.php;
+        include        fastcgi_params;
+    }
+}

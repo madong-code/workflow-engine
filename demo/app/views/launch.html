@@ -1,0 +1,238 @@
+<!-- 发起申请：已发布定义卡片 → 点击右侧滑入发起抽屉（固定双页签：表单 / 流程图）；字段模板见 public/assets/form-templates.js -->
+<section class="page" data-page="launch">
+  <div class="toolbar">
+    <h2>发起申请</h2>
+    <span class="muted">仅显示已发布定义，点击卡片填写并发起</span>
+    <div class="spacer"></div>
+    <button class="btn" id="btnReloadLaunch">刷新</button>
+  </div>
+  <div class="cards" id="launchCards"></div>
+
+  <!-- 发起抽屉：表单页签填写发起，流程图页签预览流程模板（首开才建 iframe，避免画布宽度 0） -->
+  <div class="drawer-mask" id="launchMask">
+    <aside class="drawer" style="width:min(900px,92vw);">
+      <div class="drawer-head">
+        <h3 id="launchTitle">发起申请</h3>
+        <button class="modal-close" id="launchClose" title="关闭">&times;</button>
+      </div>
+      <div class="drawer-tabs" id="launchTabs">
+        <button class="dtab active" data-tab="form">表单</button>
+        <button class="dtab" data-tab="flow">流程图</button>
+      </div>
+      <div class="drawer-body">
+        <div class="dpanel active" data-panel="form" id="launchBody"></div>
+        <div class="dpanel" data-panel="flow">
+          <div class="flow-toolbar"><div class="mode-switch" id="launchModeSwitch"></div></div>
+          <div class="flow-box"><iframe id="launchViewerFrame" src=""></iframe></div>
+        </div>
+      </div>
+      <div class="drawer-foot">
+        <button class="btn" id="launchCancel">取消</button>
+        <button class="btn primary" id="btnSubmitLaunch">提 交 发 起</button>
+      </div>
+    </aside>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const MODES = [
+    { key: 'dingtalk', label: '钉钉模式' },
+    { key: 'canvas', label: '画布模式' },
+  ];
+  const S = {
+    launchDefine: null,
+    viewerFrame: null,
+    viewerReady: false,
+    viewerStarted: false,  // 流程图页签首次激活标记
+    viewerPayload: null,   // { data: content_json, viewer: true, highLight: {} }
+    mode: localStorage.getItem('wf_viewer_mode') === 'canvas' ? 'canvas' : 'dingtalk',
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  async function loadCards() {
+    const defines = await A.api('/defines');
+    const published = defines.filter((d) => Number(d.state) === 1);
+    const box = document.getElementById('launchCards');
+    box.innerHTML = published.map((d) =>
+      '<div class="card" data-id="' + d.id + '">'
+      + '<h3>' + esc(d.display_name || d.name) + '</h3>'
+      + '<p><code>' + d.name + '</code> · v' + d.version + ' · 发起人：' + esc(A.userLabel(A.state.operator)) + '</p>'
+      + '</div>'
+    ).join('') || '<div class="empty">暂无已发布流程</div>';
+  }
+
+  /** 切换页签；流程图首次激活时才启动 viewer（容器可见后重建，避免画布宽 0） */
+  function switchTab(tab) {
+    document.querySelectorAll('#launchTabs .dtab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('#launchMask .dpanel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab));
+    if (tab === 'flow' && !S.viewerStarted) rebuildViewer();
+  }
+
+  function resetToFormTab() {
+    switchTab('form');
+  }
+
+  function renderModeSwitch() {
+    document.getElementById('launchModeSwitch').innerHTML = MODES.map((m) =>
+      '<button class="ms-btn ' + (m.key === S.mode ? 'active' : '') + '" data-mode="' + m.key + '">' + m.label + '</button>'
+    ).join('');
+  }
+
+  /** 按 mode 参数重建 viewer iframe（组件完全重置，确保模式干净生效） */
+  function rebuildViewer() {
+    if (!S.viewerFrame) return;
+    S.viewerStarted = true;
+    S.viewerReady = false;
+    S.viewerFrame.src = '/assets/ui/index.html?viewer=1&mode=' + S.mode + '&t=' + Date.now();
+  }
+
+  function pushToViewer() {
+    if (S.viewerFrame && S.viewerFrame.contentWindow && S.viewerPayload) {
+      S.viewerFrame.contentWindow.postMessage(Object.assign({ type: 'flow.load', mode: S.mode }, S.viewerPayload), '*');
+    }
+  }
+
+  async function showLaunchForm(define) {
+    S.launchDefine = define;
+    const fields = window.FormTemplates.fieldsFor(define);
+    const html = fields.map((f) => {
+      if (f.type === 'user') {
+        return '<div class="form-item"><label>' + f.label + '</label>'
+          + '<select data-key="' + f.key + '">'
+          + A.state.users.map((u) => '<option value="' + u.name + '"' + (u.name === f.value ? ' selected' : '') + '>' + esc(u.display_name) + '</option>').join('')
+          + '</select></div>';
+      }
+      if (f.type === 'users') {
+        const sel = Array.isArray(f.value) ? f.value : [];
+        return '<div class="form-item"><label>' + f.label + '</label>'
+          + '<div class="checks">' + A.state.users.map((u) =>
+            '<label><input type="checkbox" data-key="' + f.key + '" value="' + u.name + '"' + (sel.includes(u.name) ? ' checked' : '') + '> ' + esc(u.display_name) + '</label>'
+          ).join('') + '</div></div>';
+      }
+      if (f.type === 'textarea') {
+        return '<div class="form-item"><label>' + f.label + '</label><textarea data-key="' + f.key + '">' + esc(f.value ?? '') + '</textarea></div>';
+      }
+      return '<div class="form-item"><label>' + f.label + '</label>'
+        + '<input class="input" type="' + f.type + '" data-key="' + f.key + '" value="' + esc(f.value ?? '') + '">'
+        + (f.help ? '<div class="help">' + f.help + '</div>' : '')
+        + '</div>';
+    }).join('');
+
+    document.getElementById('launchTitle').textContent = '发起：' + (define.display_name || define.name);
+    document.getElementById('launchBody').innerHTML = html;
+    document.getElementById('launchMask').classList.add('show');
+    resetToFormTab();
+
+    // 先取流程模板数据再亮抽屉后填充：避免「抽屉已开 → 用户切到流程图页签触发 rebuildViewer，
+    // 数据请求恢复执行又 rebuildViewer」的 iframe 双重加载竞争（与 DetailDrawer 同口径）
+    S.viewerReady = false;
+    S.viewerPayload = null;
+    try {
+      const d = await A.api('/defines/' + define.id);
+      S.viewerPayload = { data: d.content_json || {}, viewer: true, highLight: {} };
+    } catch (err) {
+      S.viewerPayload = null;
+    }
+    if (S.viewerStarted) rebuildViewer();
+    else if (S.viewerReady) pushToViewer();
+  }
+
+  function closeLaunch() {
+    document.getElementById('launchMask').classList.remove('show');
+    S.launchDefine = null;
+    if (S.viewerFrame) S.viewerFrame.src = 'about:blank';
+    S.viewerReady = false;
+    S.viewerStarted = false;
+    S.viewerPayload = null;
+  }
+
+  async function submitLaunch() {
+    const define = S.launchDefine;
+    if (!define) return;
+    const body = document.getElementById('launchBody');
+    const vars = { operator: A.state.operator };
+    body.querySelectorAll('[data-key]').forEach((el) => {
+      if (el.type === 'checkbox') {
+        if (el.checked) {
+          vars[el.dataset.key] = vars[el.dataset.key] || [];
+          vars[el.dataset.key].push(el.value);
+        }
+      } else {
+        vars[el.dataset.key] = el.type === 'number' ? Number(el.value) : el.value;
+      }
+    });
+    try {
+      const inst = await A.api('/instances', { method: 'POST', body: { defineId: define.id, operator: A.state.operator, vars } });
+      A.message('发起成功，实例号：' + String(inst.id).slice(-8), 'success');
+      closeLaunch();
+    } catch (err) {
+      A.message('发起失败：' + err.message, 'error');
+    }
+  }
+
+  function init() {
+    if (window.__launchInited) return;
+    window.__launchInited = true;
+
+    document.getElementById('launchCards').addEventListener('click', (e) => {
+      const card = e.target.closest('.card');
+      if (!card) return;
+      A.api('/defines').then((list) => {
+        const d = list.find((x) => x.id === card.dataset.id);
+        if (d) showLaunchForm(d);
+      }).catch((err) => A.message(err.message, 'error'));
+    });
+
+    S.viewerFrame = document.getElementById('launchViewerFrame');
+    renderModeSwitch();
+
+    document.getElementById('launchTabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.dtab[data-tab]');
+      if (btn) switchTab(btn.dataset.tab);
+    });
+
+    // 模式切换：钉钉 / 画布，偏好持久化（与详情抽屉共用 wf_viewer_mode）
+    document.getElementById('launchModeSwitch').addEventListener('click', (e) => {
+      const btn = e.target.closest('.ms-btn[data-mode]');
+      if (!btn || btn.dataset.mode === S.mode) return;
+      S.mode = btn.dataset.mode;
+      localStorage.setItem('wf_viewer_mode', S.mode);
+      renderModeSwitch();
+      rebuildViewer();
+    });
+
+    // viewer iframe 就绪后推送流程模板数据
+    window.addEventListener('message', (e) => {
+      const msg = e.data;
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'flow.ready' && S.viewerFrame && e.source === S.viewerFrame.contentWindow) {
+        S.viewerReady = true;
+        if (S.viewerPayload) pushToViewer();
+      }
+    });
+
+    document.getElementById('launchClose').addEventListener('click', closeLaunch);
+    document.getElementById('launchCancel').addEventListener('click', closeLaunch);
+    document.getElementById('launchMask').addEventListener('click', (e) => {
+      if (e.target.id === 'launchMask') closeLaunch();
+    });
+    document.getElementById('btnSubmitLaunch').addEventListener('click', submitLaunch);
+    document.getElementById('btnReloadLaunch').addEventListener('click', () => {
+      loadCards().catch((err) => A.message(err.message, 'error'));
+    });
+  }
+
+  async function reload() {
+    init();
+    await loadCards();
+  }
+
+  App.registerPage('launch', { reload });
+})();
+</script>

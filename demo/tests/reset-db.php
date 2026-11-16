@@ -2,9 +2,9 @@
 /** 临时脚本：清空 demo 表并重新安装种子（表结构保留） */
 declare(strict_types=1);
 
-require __DIR__ . '/../src/bootstrap.php';
+require __DIR__ . '/../app/bootstrap.php';
 
-use madong\workflow\demo\Database;
+use madong\workflow\demo\model\Database;
 
 $pdo = Database::pdo();
 $tables = [
@@ -14,6 +14,8 @@ $tables = [
     'wf_demo_task_actor',
     'wf_demo_task',
     'wf_demo_instance',
+    'wf_demo_cc_instance',
+    'wf_demo_delegate',
     'wf_demo_define',
     'wf_demo_user',
 ];

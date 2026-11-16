@@ -1,0 +1,162 @@
+<!-- 工作台：个人卡 4 张 + 全局览 8 卡 + 趋势/流程Top/状态分布三面板 + 最近待办（默认首页） -->
+<section class="page" data-page="workspace">
+  <div class="toolbar" style="margin-bottom:0;">
+    <h2 class="ws-title" style="margin:0;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>
+      工作台
+    </h2>
+    <div class="spacer"></div>
+    <button class="btn" id="btnReloadWorkspace">刷新</button>
+  </div>
+  <div id="wsBody" style="flex:0 0 auto;"></div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { data: null };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** 时长格式化：<60s 秒；>=60s 分+秒 */
+  function fmtDur(sec) {
+    sec = Number(sec) || 0;
+    if (sec < 60) return sec + ' 秒';
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ' 分' + (s ? ' ' + s + ' 秒' : '');
+  }
+
+  function statCard(num, label, extra) {
+    return '<div class="stat"><div class="num ' + (extra || '') + '">' + num + '</div><div class="label">' + esc(label) + '</div></div>';
+  }
+
+  function render() {
+    const body = document.getElementById('wsBody');
+    if (!S.data) {
+      body.innerHTML = '<div class="empty">暂无工作台数据</div>';
+      return;
+    }
+    const p = S.data.personal || {};
+    const g = S.data.global || {};
+
+    // 个人卡（图 1 上排 4 张）
+    const personal = '<div class="ws-grid">'
+      + statCard(p.todo || 0, '待办')
+      + statCard(p.done || 0, '在办（已处理）')
+      + statCard(p.mine || 0, '我发起的')
+      + statCard(p.cc || 0, '抄送我的')
+      + '</div>';
+
+    // 全局览（图 1 中排 8 卡）
+    const global = '<div class="ws-sub">全局览 <small>stats/overview · trend · group</small></div>'
+      + '<div class="ws-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">'
+      + statCard(g.total || 0, '实例总数')
+      + statCard(g.active || 0, '进行中')
+      + statCard(g.finished || 0, '已完成')
+      + statCard(g.today || 0, '今日新增')
+      + statCard(fmtDur(g.avg_sec), '平均办结时长')
+      + statCard((Number(g.reject_rate) || 0) + '%', '驳回率')
+      + statCard(g.backlog || 0, '积压任务')
+      + statCard(g.overdue || 0, '逾期任务', (g.overdue || 0) > 0 ? 'warn' : '')
+      + '</div>';
+
+    // 近 7 天趋势（发起/办结 双柱，高度按最大值归一）
+    const trend = S.data.trend || [];
+    const maxVal = Math.max(1, ...trend.map((d) => Math.max(d.started, d.finished)));
+    const bars = trend.map((d) => {
+      const h1 = Math.max(2, Math.round(d.started / maxVal * 130));
+      const h2 = Math.max(2, Math.round(d.finished / maxVal * 130));
+      return '<div class="ws-bar-group" title="' + d.date + ' 发起 ' + d.started + ' · 办结 ' + d.finished + '">'
+        + '<div class="ws-bar started" style="height:' + h1 + 'px;"></div>'
+        + '<div class="ws-bar finished" style="height:' + h2 + 'px;"></div>'
+        + '<span class="ws-date">' + esc(d.date) + '</span>'
+        + '</div>';
+    }).join('');
+    const trendPanel = '<div class="ws-panel"><h3>近 7 天趋势 <small>发起 / 办结</small></h3>'
+      + '<div class="ws-bars">' + bars + '</div>'
+      + '<div style="display:flex;gap:14px;font-size:12px;color:var(--text-3);margin-top:6px;">'
+      + '<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--primary);margin-right:5px;"></i>发起</span>'
+      + '<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--ok);margin-right:5px;"></i>办结</span>'
+      + '</div></div>';
+
+    // 流程 Top 5（group/define）
+    const tops = S.data.top_defines || [];
+    const topPanel = '<div class="ws-panel"><h3>流程 Top 5 <small>group/define</small></h3>'
+      + (tops.length
+        ? '<ul class="ws-top-list">' + tops.map((d) =>
+            '<li title="' + esc(d.name) + '">'
+            + '<span class="t-name">' + esc(d.name) + '</span>'
+            + '<span class="t-count">' + d.count + '</span>'
+            + '<span class="t-sec">' + fmtDur(d.avg_sec) + '</span>'
+            + '</li>').join('') + '</ul>'
+        : '<div class="ws-empty">暂无实例数据</div>')
+      + '</div>';
+
+    // 状态分布（group/state，横条按最大值归一）
+    const dist = (S.data.state_dist || []).filter((d) => d.count > 0);
+    const distMax = Math.max(1, ...dist.map((d) => d.count));
+    const distPanel = '<div class="ws-panel"><h3>状态分布 <small>group/state</small></h3>'
+      + (dist.length
+        ? '<div class="ws-dist">' + dist.map((d) => {
+            const meta = A.INSTANCE_STATES[d.state] || ['未知', 'gray'];
+            const cls = { 0: 's0', 1: 's1', 2: 's2', 3: 's3', 4: 's4', 5: 's5' }[d.state] || 's4';
+            const w = Math.max(4, Math.round(d.count / distMax * 100));
+            return '<div class="ws-dist-row">'
+              + '<span class="d-label">' + esc(meta[0]) + '</span>'
+              + '<span class="d-track"><span class="d-fill ' + cls + '" style="width:' + w + '%;"></span></span>'
+              + '<span class="d-num">' + d.count + '</span>'
+              + '</div>';
+          }).join('') + '</div>'
+        : '<div class="ws-empty">暂无实例数据</div>')
+      + '</div>';
+
+    // 最近待办
+    const recent = S.data.recent_todos || [];
+    const recentBlock = '<div class="ws-sub" style="margin-top:12px;">最近待办</div>'
+      + (recent.length
+        ? '<ul class="ws-todo-list">' + recent.map((t) =>
+            '<li>'
+            + '<span class="t-main"><strong>' + esc(t.display_name || t.task_name) + '</strong>'
+            + ' <span class="muted">' + esc(t.instance_display_name || '-') + '</span></span>'
+            + '<span class="t-time">' + A.fmtTime(t.create_time) + '</span>'
+            + '<button class="btn sm" data-goto-todo="' + (t.id || '') + '">去办理</button>'
+            + '</li>').join('') + '</ul>'
+        : '<div class="ws-empty">暂无待办，喝茶吧 ☕</div>');
+
+    body.innerHTML = personal + global
+      + '<div class="ws-panels">' + trendPanel + topPanel + distPanel + '</div>'
+      + recentBlock;
+  }
+
+  async function loadWorkspace() {
+    try {
+      S.data = await A.api('/workspace/overview?operator=' + encodeURIComponent(A.state.operator));
+      render();
+    } catch (err) {
+      document.getElementById('wsBody').innerHTML = '<div class="empty">' + esc(err.message) + '</div>';
+    }
+  }
+
+  function init() {
+    if (window.__workspaceInited) return;
+    window.__workspaceInited = true;
+
+    document.getElementById('wsBody').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-goto-todo]');
+      if (!btn) return;
+      A.openPage('todo');
+    });
+    document.getElementById('btnReloadWorkspace').addEventListener('click', loadWorkspace);
+  }
+
+  async function reload() {
+    init();
+    await loadWorkspace();
+  }
+
+  App.registerPage('workspace', { reload });
+})();
+</script>

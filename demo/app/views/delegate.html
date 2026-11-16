@@ -1,0 +1,218 @@
+<!-- 我的委托：页签形态（我的委托 / 委托我的）+ 新建委托；生效委托使受托人可见并代办委托人待办。
+     表格按页签首次激活时懒挂载：锚点处于可见布局后才能推算自适应全屏高度（resolveFullHeight 依赖 offsetTop）。 -->
+<section class="page" data-page="delegate">
+  <div class="toolbar">
+    <h2>我的委托</h2>
+    <span class="muted">生效中的委托：受托人可在「我的待办」看到委托人的待办并代办</span>
+    <div class="spacer"></div>
+    <button class="btn primary" id="btnNewDelegate">新建委托</button>
+    <button class="btn" id="btnReloadDelegate">刷新</button>
+  </div>
+  <div class="page-tabs" id="delegateTabs">
+    <button class="ptab active" data-tab="mine">我的委托<span class="ptab-count" id="delegateMineCount"></span></button>
+    <button class="ptab" data-tab="forMe">委托我的<span class="ptab-count" id="delegateForMeCount"></span></button>
+  </div>
+  <div class="tab-panel active" data-panel="mine">
+    <div id="delegateMine"></div>
+  </div>
+  <div class="tab-panel" data-panel="forMe">
+    <div id="delegateForMe"></div>
+  </div>
+
+  <div class="modal-mask" id="delegateMask">
+    <div class="modal" style="width:min(480px,92vw);">
+      <div class="modal-head">
+        <h3 id="delegateTitle">新建委托</h3>
+        <button class="modal-close" id="delegateClose" title="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-item">
+          <label>受托人</label>
+          <select id="delegateTarget"></select>
+        </div>
+        <div class="form-item">
+          <label>限定流程（可选）</label>
+          <select id="delegateDefine">
+            <option value="">全部流程</option>
+          </select>
+        </div>
+        <div class="help">创建后立即生效；受托人在待办/已办列表会看到委托人的任务（带「受托自」标记）。</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="delegateCancel">取消</button>
+        <button class="btn primary" id="delegateSubmit">确 认</button>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { rows: [], defines: [] };
+  let tblMine, tblForMe;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function scopeLabel(d) {
+    return d.define_name ? '<code>' + esc(d.define_name) + '</code>' : '<span class="badge info">全部流程</span>';
+  }
+
+  function statusBadge(d) {
+    return Number(d.status) === 1 ? '<span class="badge done">生效中</span>' : '<span class="badge gray">已停用</span>';
+  }
+
+  function tableCols(isMine) {
+    return [[
+      { title: isMine ? '受托人' : '委托人', minWidth: 120, templet: (d) =>
+          '<strong>' + esc(isMine ? A.userLabel(d.target_operator) : A.userLabel(d.source_operator)) + '</strong>' },
+      { title: '范围', minWidth: 140, templet: (d) => scopeLabel(d) },
+      { title: '状态', width: 100, templet: (d) => statusBadge(d) },
+      { title: '创建时间', width: 140, templet: (d) => '<span class="muted">' + A.fmtTime(d.create_time) + '</span>' },
+      { title: '操作', width: 300, templet: isMine
+        ? (d) => '<button class="btn sm' + (Number(d.status) === 1 ? '' : ' ok') + '" lay-event="toggle" data-toggle="' + esc(d.id) + '">'
+            + (Number(d.status) === 1 ? '停用' : '启用') + '</button> '
+            + '<button class="btn sm danger" lay-event="del" data-del="' + esc(d.id) + '">删除</button>'
+        : () => '<span class="muted">-</span>' },
+    ]];
+  }
+
+  function mountMine() {
+    if (tblMine) return;
+    tblMine = A.mountTable(document.getElementById('delegateMine'), {
+      id: 'delegateMine',
+      empty: '暂无委托，点击右上角「新建委托」把待办委托给他人',
+      page: false,
+      cols: tableCols(true),
+      // 操作委托仅限「我的委托」页签
+      onTool: async (obj) => {
+        try {
+          if (obj.event === 'toggle') {
+            const row = await A.api('/delegates/' + obj.data.id + '/toggle', { method: 'POST' });
+            A.message(Number(row.status) === 1 ? '委托已启用' : '委托已停用', 'success');
+            await loadDelegates();
+          } else if (obj.event === 'del' && confirm('确认删除该委托？')) {
+            await A.api('/delegates/' + obj.data.id, { method: 'DELETE' });
+            A.message('委托已删除', 'success');
+            await loadDelegates();
+          }
+        } catch (err) {
+          A.message(err.message, 'error');
+        }
+      },
+    });
+  }
+
+  function mountForMe() {
+    if (tblForMe) return;
+    tblForMe = A.mountTable(document.getElementById('delegateForMe'), {
+      id: 'delegateForMe',
+      empty: '暂无他人委托给我的记录',
+      page: false,
+      cols: tableCols(false),
+    });
+  }
+
+  function render() {
+    const op = A.state.operator;
+    const mine = S.rows.filter((d) => d.source_operator === op);
+    const forMe = S.rows.filter((d) => d.target_operator === op);
+    document.getElementById('delegateMineCount').textContent = '（' + mine.length + '）';
+    document.getElementById('delegateForMeCount').textContent = '（' + forMe.length + '）';
+    if (tblMine) tblMine.update(mine, '暂无委托，点击右上角「新建委托」把待办委托给他人');
+    if (tblForMe) tblForMe.update(forMe, '暂无他人委托给我的记录');
+  }
+
+  async function loadDelegates() {
+    try {
+      S.rows = await A.api('/delegates');
+      render();
+    } catch (err) {
+      A.message(err.message, 'error');
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('#delegateTabs .ptab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('section[data-page="delegate"] .tab-panel').forEach((p) => {
+      p.classList.toggle('active', p.dataset.panel === tab);
+    });
+    // 页签面板可见后再挂载表格，保证全屏高度推算正确；已挂载则刷新数据
+    if (tab === 'mine') {
+      mountMine();
+      render();
+    } else {
+      mountForMe();
+      render();
+    }
+  }
+
+  function openCreate() {
+    const target = document.getElementById('delegateTarget');
+    const define = document.getElementById('delegateDefine');
+    target.innerHTML = A.state.users
+      .filter((u) => u.name !== A.state.operator)
+      .map((u) => '<option value="' + esc(u.name) + '">' + esc(u.display_name) + '</option>').join('');
+    define.innerHTML = '<option value="">全部流程</option>'
+      + S.defines.map((d) => '<option value="' + esc(d.name) + '">' + esc(d.display_name || d.name) + '</option>').join('');
+    document.getElementById('delegateMask').classList.add('show');
+  }
+
+  function closeCreate() {
+    document.getElementById('delegateMask').classList.remove('show');
+  }
+
+  async function submitCreate() {
+    try {
+      await A.api('/delegates', {
+        method: 'POST',
+        body: {
+          operator: A.state.operator,
+          targetOperator: document.getElementById('delegateTarget').value,
+          defineName: document.getElementById('delegateDefine').value,
+        },
+      });
+      A.message('委托创建成功，受托人已可代办', 'success');
+      closeCreate();
+      await loadDelegates();
+    } catch (err) {
+      A.message('创建失败：' + err.message, 'error');
+    }
+  }
+
+  function init() {
+    if (window.__delegateInited) return;
+    window.__delegateInited = true;
+
+    document.getElementById('delegateTabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.ptab[data-tab]');
+      if (btn) switchTab(btn.dataset.tab);
+    });
+    mountMine();  // 默认「我的委托」页签
+
+    document.getElementById('btnNewDelegate').addEventListener('click', openCreate);
+    document.getElementById('btnReloadDelegate').addEventListener('click', loadDelegates);
+    document.getElementById('delegateClose').addEventListener('click', closeCreate);
+    document.getElementById('delegateCancel').addEventListener('click', closeCreate);
+    document.getElementById('delegateSubmit').addEventListener('click', submitCreate);
+    document.getElementById('delegateMask').addEventListener('click', (e) => {
+      if (e.target.id === 'delegateMask') closeCreate();
+    });
+  }
+
+  async function reload() {
+    init();
+    try {
+      S.defines = await A.api('/defines');
+    } catch (err) {
+      S.defines = [];
+    }
+    await loadDelegates();
+  }
+
+  App.registerPage('delegate', { reload });
+})();
+</script>

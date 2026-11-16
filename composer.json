@@ -1,8 +1,14 @@
 {
     "name": "madong/workflow",
-    "description": "PHP 8.1+ workflow engine - parse designer JSON definitions and drive process execution",
+    "description": "Ingenious v3 workflow engine - parse designer JSON definitions and drive process execution",
+    "keywords": ["ingenious", "workflow", "madong"],
     "type": "library",
     "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Mr.April"
+        }
+    ],
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {

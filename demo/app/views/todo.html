@@ -1,0 +1,159 @@
+<!-- 我的待办：列表 + 搜索过滤 + 分页；同意/退回/拒绝弹出居中办理弹窗（审批意见 + 确认） -->
+<section class="page" data-page="todo">
+  <div class="toolbar">
+    <h2>我的待办</h2>
+    <span class="muted">当前用户：<span id="todoUser" class="muted"></span></span>
+    <input class="search-input" id="todoSearch" placeholder="搜索流程名...">
+    <button class="btn" id="btnReloadTodo">刷新</button>
+  </div>
+  <div id="todoList"></div>
+
+  <div class="modal-mask" id="approveMask">
+    <div class="modal" style="width:min(560px,92vw);">
+      <div class="modal-head">
+        <h3 id="approveTitle">办理审批</h3>
+        <button class="modal-close" id="approveClose" title="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="approveInfo" style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.8;"></div>
+        <div class="form-item">
+          <label>审批意见（可选）</label>
+          <textarea id="approveComment" placeholder="请输入审批意见"></textarea>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="approveCancel">取消</button>
+        <button class="btn" id="approveSubmit">确认</button>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+(function () {
+  'use strict';
+  const A = window.App;
+  const S = { rows: [], keyword: '', pending: null };  // pending = { taskId, action, task }
+  let tbl;
+
+  const ACTION_TEXT = { agree: '同意', back: '退回发起人', reject: '拒绝终止' };
+  const ACTION_BTN = { agree: '同意', back: '退回', reject: '拒绝' };
+  const ACTION_CLS = { agree: 'primary', back: 'warn', reject: 'danger' };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function filtered() {
+    const kw = S.keyword.trim().toLowerCase();
+    if (!kw) return S.rows;
+    return S.rows.filter((t) =>
+      ((t.instance_display_name || '') + (t.display_name || '') + (t.task_name || '')).toLowerCase().includes(kw)
+    );
+  }
+
+  function render() {
+    tbl.update(
+      filtered(),
+      S.keyword ? '没有匹配的待办' : '当前用户暂无待办'
+    );
+  }
+
+  async function loadTodos() {
+    document.getElementById('todoUser').textContent = A.userLabel(A.state.operator);
+    try {
+      S.rows = await A.api('/todos?operator=' + encodeURIComponent(A.state.operator));
+      render();
+    } catch (err) {
+      A.message('待办加载失败：' + err.message, 'error');
+      tbl.update([], err.message);
+    }
+  }
+
+  function openApprove(task, action) {
+    S.pending = { taskId: task.id, action };
+    document.getElementById('approveTitle').textContent = '办理审批 · ' + ACTION_TEXT[action];
+    document.getElementById('approveInfo').innerHTML =
+      '任务：<strong>' + esc(task.display_name || task.task_name) + '</strong><br>'
+      + '流程：' + esc(task.instance_display_name || '-') + ' · 发起人：' + esc(A.userLabel(task.instance_operator));
+    document.getElementById('approveComment').value = '';
+    const btn = document.getElementById('approveSubmit');
+    btn.textContent = '确认' + ACTION_TEXT[action].replace(/发起人|终止/, '');
+    btn.className = 'btn ' + ACTION_CLS[action];
+    document.getElementById('approveMask').classList.add('show');
+  }
+
+  function closeApprove() {
+    document.getElementById('approveMask').classList.remove('show');
+    S.pending = null;
+  }
+
+  async function submitApprove() {
+    if (!S.pending) return;
+    const comment = document.getElementById('approveComment').value || '';
+    try {
+      await A.api('/tasks/' + S.pending.taskId + '/complete', {
+        method: 'POST',
+        body: { operator: A.state.operator, action: S.pending.action, comment },
+      });
+      A.message('办理成功', 'success');
+      closeApprove();
+      await loadTodos();
+    } catch (err) {
+      A.message('办理失败：' + err.message, 'error');
+    }
+  }
+
+  function init() {
+    if (window.__todoInited) return;
+    window.__todoInited = true;
+
+    // layui.table：内置分页 + tool 事件（操作按钮 lay-event 与 data-* 双属性，方便调试与测试定位）
+    tbl = A.mountTable(document.getElementById('todoList'), {
+      id: 'todo',
+      empty: '当前用户暂无待办',
+      cols: [[
+        { title: '任务', minWidth: 280, templet: (t) =>
+            '<strong>' + esc(t.display_name || t.task_name) + '</strong> <code class="muted">' + esc(t.task_name) + '</code>'
+            + (t.delegated_from ? '<br><span class="badge info">受托自 ' + esc(A.userLabel(t.delegated_from)) + '</span>' : '') },
+        { title: '流程', minWidth: 120, templet: (t) => esc(t.instance_display_name || '-') },
+        { title: '发起人', minWidth: 90, templet: (t) => esc(A.userLabel(t.instance_operator)) },
+        { title: '到达时间', minWidth: 120, templet: (t) => '<span class="muted">' + A.fmtTime(t.create_time) + '</span>' },
+        { title: '办理', width: 472, templet: (t) =>
+            '<button class="btn sm" lay-event="detail" data-detail="' + (t.process_instance_id || '') + '">详情</button> '
+            + ['agree', 'back', 'reject'].map((a) =>
+                '<button class="btn sm ' + ACTION_CLS[a] + '" lay-event="' + a + '" data-action="' + a + '">' + ACTION_BTN[a] + '</button>'
+              ).join(' ') },
+      ]],
+      onTool: (obj) => {
+        const t = obj.data;
+        if (obj.event === 'detail') {
+          if (t.process_instance_id) DetailDrawer.openInstance(t.process_instance_id).catch((err) => A.message(err.message, 'error'));
+          return;
+        }
+        if (ACTION_TEXT[obj.event]) openApprove(t, obj.event);
+      },
+    });
+
+    document.getElementById('todoSearch').addEventListener('input', (e) => {
+      S.keyword = e.target.value;
+      render();
+    });
+    document.getElementById('btnReloadTodo').addEventListener('click', loadTodos);
+
+    document.getElementById('approveClose').addEventListener('click', closeApprove);
+    document.getElementById('approveCancel').addEventListener('click', closeApprove);
+    document.getElementById('approveSubmit').addEventListener('click', submitApprove);
+    document.getElementById('approveMask').addEventListener('click', (e) => {
+      if (e.target.id === 'approveMask') closeApprove();
+    });
+  }
+
+  async function reload() {
+    init();
+    await loadTodos();
+  }
+
+  App.registerPage('todo', { reload });
+})();
+</script>

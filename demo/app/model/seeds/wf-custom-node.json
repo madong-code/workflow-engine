@@ -1,0 +1,18 @@
+{
+  "name": "wf-custom-node",
+  "display_name": "自定义节点流程",
+  "instance_url": "customNodeForm",
+  "nodes": [
+    { "id": "start", "type": "ingenious:start", "x": 280, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 280, "y": 360, "value": "开始" } },
+    { "id": "apply", "type": "ingenious:task", "x": 480, "y": 320, "properties": { "width": 120, "height": 40, "assignee": "apply.operator", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 480, "y": 320, "value": "发起申请" } },
+    { "id": "calc", "type": "ingenious:custom", "x": 720, "y": 320, "properties": { "width": 120, "height": 40, "clazz": "madong.workflow.demo.engine.AmountCalculateHandler", "args": "${f_amount}", "var": "calc_result" }, "text": { "x": 720, "y": 320, "value": "金额计算" } },
+    { "id": "approveDept", "type": "ingenious:task", "x": 960, "y": 320, "properties": { "width": 120, "height": 40, "assignee": "dept_manager", "task_type": "Major", "perform_type": "ANY", "auto_execute": "N" }, "text": { "x": 960, "y": 320, "value": "部门领导审批" } },
+    { "id": "end", "type": "ingenious:end", "x": 1200, "y": 320, "properties": { "width": 120, "height": 40 }, "text": { "x": 1200, "y": 360, "value": "结束" } }
+  ],
+  "edges": [
+    { "id": "t1", "type": "ingenious:transition", "sourceNodeId": "start", "targetNodeId": "apply", "properties": {} },
+    { "id": "t2", "type": "ingenious:transition", "sourceNodeId": "apply", "targetNodeId": "calc", "properties": {} },
+    { "id": "t3", "type": "ingenious:transition", "sourceNodeId": "calc", "targetNodeId": "approveDept", "properties": {} },
+    { "id": "t4", "type": "ingenious:transition", "sourceNodeId": "approveDept", "targetNodeId": "end", "properties": {} }
+  ]
+}
