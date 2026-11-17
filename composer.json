@@ -1,6 +1,6 @@
 {
     "name": "madong/workflow",
-    "version": "v3.0.1",
+    "version": "v3.0.2",
     "description": "Ingenious v3 workflow engine - parse designer JSON definitions and drive process execution",
     "keywords": ["ingenious", "workflow", "madong"],
     "type": "library",
